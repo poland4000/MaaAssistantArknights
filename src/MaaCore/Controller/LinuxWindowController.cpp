@@ -203,6 +203,8 @@ bool LinuxWindowController::click(const Point& p)
             send_button(ButtonRelease, p.x, p.y, Button1);
             std::this_thread::sleep_for(std::chrono::milliseconds(click_delay_ms));
         }
+
+        park_cursor();
     });
     return true;
 }
@@ -230,6 +232,20 @@ bool LinuxWindowController::window_focused() const
     }
     XGetInputFocus(m_display, &focus, &revert);
     return focus == m_window;
+}
+
+void LinuxWindowController::park_cursor()
+{
+    // 主界面有跟随游戏内光标的视差（陀螺仪）效果：光标位置不同，菜单按钮的
+    // 像素就不同，模板分数随之漂移。每次点击/滑动后把游戏内光标停回固定点
+    // （主界面左下角 BREAKING NEWS 附近，720p 约 (8, 668)），让视差回到
+    // 采集模板时的姿态。对战斗无影响：底左角无交互元素，且这只是 hover。
+    if (m_width <= 0 || m_height <= 0) {
+        return;
+    }
+    const int px = static_cast<int>(8.0 * m_width / 1280.0);
+    const int py = static_cast<int>(668.0 * m_height / 720.0);
+    send_motion(px, py, 0);
 }
 
 bool LinuxWindowController::input(const std::string& text)
@@ -336,6 +352,8 @@ bool LinuxWindowController::swipe(
         }
 
         send_button(ButtonRelease, x2, y2, Button1);
+
+        park_cursor();
     });
     return ret;
 }

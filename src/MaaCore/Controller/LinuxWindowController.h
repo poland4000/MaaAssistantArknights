@@ -107,6 +107,7 @@ private:
     void guard_input_focus(const std::function<void()>& action);
     bool is_battle_start_button(const Point& p) const;
     bool window_focused() const;
+    void park_cursor();
 
 private:
     Display* m_display = nullptr;
