@@ -352,8 +352,7 @@ bool LinuxWindowController::swipe(
         }
 
         send_button(ButtonRelease, x2, y2, Button1);
-
-        park_cursor();
+        // 不在滑动后 park：松手后的惯性/位移判定仍在进行，额外的移动事件会打断滑动
     });
     return ret;
 }
