@@ -59,6 +59,8 @@ busctl --user call org.kde.KWin /KWin org.kde.KWin reconfigure
 2026-08 客户端更新还会**吞掉触发激活的那次点击**（Windows 激活语义）：
 游戏非前台时到达的点击被激活流程消耗，copilot 的 BattleStartPre 单击被吞后
 流程错乱（编队为空、直接开打）。
-解决：输入前先 `XSetInputFocus` 聚焦（无点击可吞），此时点击必然生效；
-输入后还原焦点并 `XRaiseWindow` 恢复遮挡。KWin focusguard 脚本因此退役
-（其回弹与本机制竞争），保留在 `focusguard/` 目录仅作参考。
+实测只有“一次性”点击受害（菜单类任务靠识别重试自愈）。最终方案：
+仅当窗口非前台且点击落在关卡界面 Start 按钮区域时补发第二次点击
+（第一次触发激活被吞，第二次落在激活完成后生效），其余输入不变；
+`guard_input_focus` 保持“输入后归还焦点”，KWin focusguard 脚本继续
+负责防止游戏激活打断用户输入。
