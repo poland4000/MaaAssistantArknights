@@ -39,7 +39,12 @@ public:
         }
 
         // compatible with old logic: if multiple roles have the same name, return the first one found in m_chars.
-        auto it = std::ranges::find_if(m_chars, [&name](const auto& pair) { return pair.second->name == name; });
+        // 也匹配各语言名称，使海外客户端用户可直接使用本地语言的干员名（如 core_char = "Wiš'adel"）
+        auto it = std::ranges::find_if(m_chars, [&name](const auto& pair) {
+            const auto& oper = pair.second;
+            return oper->name == name || oper->name_en == name || oper->name_jp == name || oper->name_kr == name ||
+                   oper->name_tw == name;
+        });
         if (it != m_chars.cend()) {
             return it->second;
         }
