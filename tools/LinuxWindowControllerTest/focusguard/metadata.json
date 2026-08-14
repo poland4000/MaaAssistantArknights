@@ -1,0 +1,13 @@
+{
+    "KPlugin": {
+        "Id": "focusguard",
+        "Name": "Focus Guard",
+        "Description": "Return focus to the previous window when Arknights activates without a real click",
+        "Version": "1.0",
+        "License": "GPL",
+        "Category": "Utilities"
+    },
+    "KPackageStructure": "KWin/Script",
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "contents/code/main.js"
+}
