@@ -41,6 +41,14 @@ int main(int argc, char** argv)
         AsstLoadResource(global_res);
     }
 
+    // PC 客户端资源覆盖包（platform_diff/pc）
+    char pc_res[1024];
+    snprintf(pc_res, sizeof(pc_res), "%s/resource/platform_diff/pc", resource_dir);
+    if (access(pc_res, F_OK) == 0) {
+        printf("loading platform resource: %s\n", pc_res);
+        AsstLoadResource(pc_res);
+    }
+
     AsstHandle handle = AsstCreateEx(on_msg, NULL);
     if (handle == NULL) {
         fprintf(stderr, "AsstCreateEx failed\n");

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "AsstCaller.h"
 
@@ -52,6 +53,17 @@ int main(int argc, char** argv)
     if (!AsstLoadResource(resource_dir)) {
         fprintf(stderr, "AsstLoadResource(%s) failed\n", resource_dir);
         return 1;
+    }
+
+    // 海外客户端资源包 + PC 平台覆盖包（若存在）
+    char extra_res[1024];
+    snprintf(extra_res, sizeof(extra_res), "%s/resource/global/YoStarEN", resource_dir);
+    if (access(extra_res, F_OK) == 0) {
+        AsstLoadResource(extra_res);
+    }
+    snprintf(extra_res, sizeof(extra_res), "%s/resource/platform_diff/pc", resource_dir);
+    if (access(extra_res, F_OK) == 0) {
+        AsstLoadResource(extra_res);
     }
 
     AsstHandle handle = AsstCreateEx(on_msg, NULL);
