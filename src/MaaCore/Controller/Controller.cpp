@@ -176,12 +176,14 @@ bool asst::Controller::stop_game(const std::string& client_type)
 bool asst::Controller::click(const Point& p)
 {
     CHECK_EXIST(m_controller, false);
+    CHECK_EXIST(m_scale_proxy, false);
     return m_scale_proxy->click(p);
 }
 
 bool asst::Controller::click(const Rect& rect)
 {
     CHECK_EXIST(m_controller, false);
+    CHECK_EXIST(m_scale_proxy, false);
     return m_scale_proxy->click(rect);
 }
 
@@ -206,6 +208,7 @@ bool asst::Controller::swipe(
     bool with_pause)
 {
     CHECK_EXIST(m_controller, false);
+    CHECK_EXIST(m_scale_proxy, false);
     return m_scale_proxy->swipe(
         p1, p2, duration, extra_swipe, slope_in, slope_out, resolve_swipe_with_pause(with_pause));
 }
@@ -221,6 +224,7 @@ bool asst::Controller::swipe(
     bool high_resolution_swipe_fix)
 {
     CHECK_EXIST(m_controller, false);
+    CHECK_EXIST(m_scale_proxy, false);
     return m_scale_proxy->swipe(
         r1,
         r2,
