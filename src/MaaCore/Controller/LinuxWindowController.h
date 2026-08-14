@@ -105,6 +105,8 @@ private:
     void send_key(KeySym keysym, bool press);
     bool ensure_focus();
     void guard_input_focus(const std::function<void()>& action);
+    bool is_battle_start_button(const Point& p) const;
+    bool window_focused() const;
 
 private:
     Display* m_display = nullptr;

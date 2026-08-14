@@ -189,8 +189,47 @@ bool LinuxWindowController::click(const Point& p)
         std::this_thread::sleep_for(std::chrono::milliseconds(click_delay_ms));
         send_button(ButtonRelease, p.x, p.y, Button1);
         std::this_thread::sleep_for(std::chrono::milliseconds(click_delay_ms));
+
+        // 2026-08 客户端：窗口非前台时，与激活过程同时到达的点击会被吞掉
+        //（Windows 激活点击语义）。实测仅影响“一次性”点击（如编队前的
+        // Start 按钮）：点击被吞后流程继续但界面未变。菜单类任务有识别重试
+        // 能自愈，Start 按钮则是单击即走。对这一区域补一次点击：
+        // 第一次触发激活（被吞），第二次落在激活完成后，必然生效。
+        if (is_battle_start_button(p) && !window_focused()) {
+            Log.info("battle-start click while unfocused: sending a second click");
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            send_button(ButtonPress, p.x, p.y, Button1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(click_delay_ms));
+            send_button(ButtonRelease, p.x, p.y, Button1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(click_delay_ms));
+        }
     });
     return true;
+}
+
+bool LinuxWindowController::is_battle_start_button(const Point& p) const
+{
+    // 720p 识别空间中关卡界面 Start 按钮的区域（OCR 实测按钮在 1151,645,53,27）。
+    // click() 收到的是窗口坐标（ControlScaleProxy 已按窗口分辨率缩放），
+    // 因此按实际窗口尺寸换算区域。
+    if (m_width <= 0 || m_height <= 0) {
+        return false;
+    }
+    const double sx = static_cast<double>(m_width) / 1280.0;
+    const double sy = static_cast<double>(m_height) / 720.0;
+    return p.x >= static_cast<int>(1100 * sx) && p.y >= static_cast<int>(600 * sy) &&
+           p.y <= static_cast<int>(700 * sy);
+}
+
+bool LinuxWindowController::window_focused() const
+{
+    Window focus = 0;
+    int revert = 0;
+    if (m_display == nullptr) {
+        return false;
+    }
+    XGetInputFocus(m_display, &focus, &revert);
+    return focus == m_window;
 }
 
 bool LinuxWindowController::input(const std::string& text)
