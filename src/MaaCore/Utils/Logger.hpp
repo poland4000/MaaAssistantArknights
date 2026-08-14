@@ -273,6 +273,17 @@ class console_ostream
 {
     std::reference_wrapper<std::ostream> m_ofs;
 
+    // ASST_DEBUG 默认把所有日志回显到 stdout；嵌入 GUI/CLI 时控制台会被
+    // 刷屏（接收方还要逐行解析），设置 MAA_LOG_CONSOLE=1 才回显
+    static bool echo_enabled()
+    {
+        static const bool enabled = [] {
+            const char* v = std::getenv("MAA_LOG_CONSOLE");
+            return v != nullptr && v[0] != '\0' && v[0] != '0';
+        }();
+        return enabled;
+    }
+
 public:
     console_ostream(console_ostream&&) = default;
     console_ostream(const console_ostream&) = default;
@@ -293,6 +304,9 @@ public:
     requires has_stream_insertion_operator<std::ostream, T>
     console_ostream& operator<<(T&& v)
     {
+        if (!echo_enabled()) {
+            return *this;
+        }
 #ifdef _WIN32
         if constexpr (std::convertible_to<T, std::string_view>) {
             asst::utils::utf8_scope scope(m_ofs.get());
@@ -309,7 +323,9 @@ public:
 
     console_ostream& operator<<(std::ostream& (*pf)(std::ostream&))
     {
-        m_ofs.get() << pf;
+        if (echo_enabled()) {
+            m_ofs.get() << pf;
+        }
         return *this;
     }
 };
@@ -762,6 +778,13 @@ private:
         m_of(&m_buff)
     {
         initialize_exception_handlers();
+
+        // 战斗循环的 trace/debug 日志量很大（快速截图下每秒数千行），
+        // MAA_LOG_TRACE=0 可在运行时关闭（不影响 info/warn/error）
+        if (const char* v = std::getenv("MAA_LOG_TRACE"); v != nullptr && v[0] == '0') {
+            level::trace.set_enabled(false);
+            level::debug.set_enabled(false);
+        }
 
         try {
             std::filesystem::create_directories(m_log_path.parent_path());
