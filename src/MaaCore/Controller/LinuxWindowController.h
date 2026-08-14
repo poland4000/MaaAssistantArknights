@@ -2,6 +2,7 @@
 
 #if !defined(_WIN32) && ASST_WITH_X11
 
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -103,6 +104,7 @@ private:
     void send_motion(int x, int y, unsigned int state);
     void send_key(KeySym keysym, bool press);
     bool ensure_focus();
+    void guard_input_focus(const std::function<void()>& action);
 
 private:
     Display* m_display = nullptr;

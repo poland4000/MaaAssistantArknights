@@ -181,13 +181,15 @@ bool LinuxWindowController::click(const Point& p)
         return false;
     }
 
-    // 与 Win32Controller 对齐：down/up 之间保持一小段时间，游戏才能识别为完整点击
-    constexpr int click_delay_ms = 50;
+    guard_input_focus([&]() {
+        // 与 Win32Controller 对齐：down/up 之间保持一小段时间，游戏才能识别为完整点击
+        constexpr int click_delay_ms = 50;
 
-    send_button(ButtonPress, p.x, p.y, Button1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(click_delay_ms));
-    send_button(ButtonRelease, p.x, p.y, Button1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(click_delay_ms));
+        send_button(ButtonPress, p.x, p.y, Button1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(click_delay_ms));
+        send_button(ButtonRelease, p.x, p.y, Button1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(click_delay_ms));
+    });
     return true;
 }
 
@@ -252,44 +254,50 @@ bool LinuxWindowController::swipe(
         }
     }
 
-    send_button(ButtonPress, x1, y1, Button1);
+    bool ret = false;
+    guard_input_focus([&]() {
+        send_button(ButtonPress, x1, y1, Button1);
 
-    const auto& opt = Config.get_options();
-    const int actual_duration = duration > 0 ? duration : opt.minitouch_swipe_default_duration;
+        const auto& opt = Config.get_options();
+        const int actual_duration = duration > 0 ? duration : opt.minitouch_swipe_default_duration;
 
-    auto bounds_check = [this](int x, int y) {
-        if (m_width <= 0 || m_height <= 0) {
+        auto bounds_check = [this](int x, int y) {
+            if (m_width <= 0 || m_height <= 0) {
+                return true;
+            }
+            return x >= 0 && x <= m_width && y >= 0 && y <= m_height;
+        };
+
+        // XSendEvent 只是把事件塞进队列，游戏按事件到达的节奏产生拖拽物理；
+        // 若一次性全部发出，游戏只会看到瞬移（点按而非拖动），所以每步之间必须真实 sleep
+        constexpr int DefaultSwipeDelay = 10; // ms
+
+        auto move_func = [this](int x, int y) {
+            send_motion(x, y, Button1Mask);
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
             return true;
+        };
+
+        ret = interpolate_swipe(
+            x1, y1, x2, y2, actual_duration, DefaultSwipeDelay, slope_in, slope_out, move_func, bounds_check);
+
+        if (ret && extra_swipe && opt.minitouch_extra_swipe_duration > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(opt.minitouch_swipe_extra_end_delay));
+            interpolate_swipe(
+                x2,
+                y2,
+                x2,
+                y2 - opt.minitouch_extra_swipe_dist,
+                opt.minitouch_extra_swipe_duration,
+                DefaultSwipeDelay,
+                slope_in,
+                slope_out,
+                move_func,
+                bounds_check);
         }
-        return x >= 0 && x <= m_width && y >= 0 && y <= m_height;
-    };
 
-    auto move_func = [this](int x, int y) {
-        send_motion(x, y, Button1Mask);
-        return true;
-    };
-
-    constexpr int DefaultSwipeDelay = 10; // ms
-
-    bool ret = interpolate_swipe(
-        x1, y1, x2, y2, actual_duration, DefaultSwipeDelay, slope_in, slope_out, move_func, bounds_check);
-
-    if (ret && extra_swipe && opt.minitouch_extra_swipe_duration > 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(opt.minitouch_swipe_extra_end_delay));
-        interpolate_swipe(
-            x2,
-            y2,
-            x2,
-            y2 - opt.minitouch_extra_swipe_dist,
-            opt.minitouch_extra_swipe_duration,
-            DefaultSwipeDelay,
-            slope_in,
-            slope_out,
-            move_func,
-            bounds_check);
-    }
-
-    send_button(ButtonRelease, x2, y2, Button1);
+        send_button(ButtonRelease, x2, y2, Button1);
+    });
     return ret;
 }
 
@@ -555,6 +563,43 @@ void LinuxWindowController::send_key(KeySym keysym, bool press)
     XSendEvent(m_display, m_window, 1, press ? KeyPressMask : KeyReleaseMask, reinterpret_cast<XEvent*>(&ev));
     XFlush(m_display);
 }
+
+void LinuxWindowController::guard_input_focus(const std::function<void()>& action)
+{
+    // focus_for_keys 为 true 时用户明确希望游戏持有键盘焦点，不做任何干预
+    if (m_focus_for_keys) {
+        action();
+        return;
+    }
+
+    // Wine 会把发给非活动窗口的合成点击当作“用户点击”，随后请求激活/抢占焦点，
+    // KWin 的防焦点窃取挡不住它（点击携带了新鲜的 user time）。
+    // 因此在合成输入前记录当前焦点窗口，若输入后游戏抢走了焦点就还回去，
+    // 保证无人值守时不会打断用户在其他窗口的输入。
+    Window prev_focus = 0;
+    int prev_revert = 0;
+    XGetInputFocus(m_display, &prev_focus, &prev_revert);
+
+    action();
+
+    if (prev_focus == 0 || prev_focus == m_window || prev_focus == PointerRoot) {
+        return;
+    }
+    Window cur_focus = 0;
+    int cur_revert = 0;
+    XGetInputFocus(m_display, &cur_focus, &cur_revert);
+    if (cur_focus != m_window) {
+        return;
+    }
+    // 目标窗口可能已被销毁；先确认其仍然存在，避免 BadWindow 走默认错误处理
+    XWindowAttributes attrs {};
+    if (XGetWindowAttributes(m_display, prev_focus, &attrs) == 0) {
+        return;
+    }
+    XSetInputFocus(m_display, prev_focus, RevertToParent, CurrentTime);
+    XFlush(m_display);
+}
+
 
 bool LinuxWindowController::ensure_focus()
 {
