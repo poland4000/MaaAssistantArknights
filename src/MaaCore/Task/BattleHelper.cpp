@@ -679,6 +679,11 @@ bool asst::BattleHelper::wait_until_start(bool weak)
 
     constexpr auto timeout_duration = std::chrono::minutes(1);
     const auto start_time = std::chrono::steady_clock::now();
+    // 快速截图后端（如 X11 窗口控制 ~10ms/帧）下这个循环会以极高帧率空转烧 CPU，
+    // 按战斗截图间隔限流（ADB 等慢后端天然受限，不受影响）
+    static const auto min_frame_interval =
+        std::chrono::milliseconds(Config.get_options().copilot_fight_screencap_interval);
+    auto prev_frame_time = std::chrono::steady_clock::time_point {};
 
     cv::Mat image = m_inst_helper.ctrler()->get_image();
     while (!m_inst_helper.need_exit() && !check_in_battle(image, weak)) {
@@ -686,6 +691,12 @@ bool asst::BattleHelper::wait_until_start(bool weak)
             Log.warn("Timeout reached while waiting to start the battle.");
             return false;
         }
+
+        const auto now = std::chrono::steady_clock::now();
+        if (const auto elapsed = now - prev_frame_time; elapsed < min_frame_interval) {
+            std::this_thread::sleep_for(min_frame_interval - elapsed);
+        }
+        prev_frame_time = std::chrono::steady_clock::now();
 
         std::this_thread::yield();
         image = m_inst_helper.ctrler()->get_image();

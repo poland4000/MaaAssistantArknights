@@ -360,6 +360,11 @@ void asst::BattleProcessTask::notify_action(const battle::copilot::Action& actio
 bool asst::BattleProcessTask::wait_condition(const Action& action)
 {
     cv::Mat image, image_prev;
+    // 快速截图后端（X11 窗口控制 ~10ms/帧）下，下方各等待循环会以极高帧率
+    // 空转烧 CPU；按战斗截图间隔限流（ADB 等慢后端天然受限，不受影响）
+    static const auto min_frame_interval =
+        std::chrono::milliseconds(Config.get_options().copilot_fight_screencap_interval);
+    auto prev_frame_time = std::chrono::steady_clock::time_point {};
     auto update_image_if_empty = [&]() {
         if (image.empty()) {
             image_prev = cv::Mat();
@@ -368,6 +373,12 @@ bool asst::BattleProcessTask::wait_condition(const Action& action)
         }
     };
     auto do_strategy_and_update_image = [&]() {
+        const auto now = std::chrono::steady_clock::now();
+        if (const auto elapsed = now - prev_frame_time; elapsed < min_frame_interval) {
+            std::this_thread::sleep_for(min_frame_interval - elapsed);
+        }
+        prev_frame_time = std::chrono::steady_clock::now();
+
         do_strategic_action(image);
         image_prev = std::move(image);
         image = ctrler()->get_image();
