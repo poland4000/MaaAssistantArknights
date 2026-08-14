@@ -1,5 +1,6 @@
 #include "MultiCopilotTaskPlugin.h"
 
+#include <cctype>
 #include <ranges>
 
 #include "Config/GeneralConfig.h"
@@ -13,6 +14,28 @@
 #include "Utils/Platform.hpp"
 #include "Vision/Matcher.h"
 #include "Vision/Miscellaneous/PipelineAnalyzer.h"
+
+namespace
+{
+// OCR 在浅色（已通关）关卡标签上容易丢连字符/空格（如 "CG-2" 识别为 "CG2"），
+// 比较时去掉 ASCII 标点并统一大小写；非 ASCII（如中文关名）字节原样保留
+bool stage_name_eq(std::string_view ocr_text, std::string_view stage_name)
+{
+    const auto normalize = [](std::string_view s) {
+        std::string out;
+        for (const unsigned char c : s) {
+            if (std::isalnum(c)) {
+                out.push_back(static_cast<char>(std::toupper(c)));
+            }
+            else if (c & 0x80) {
+                out.push_back(static_cast<char>(c));
+            }
+        }
+        return out;
+    };
+    return normalize(ocr_text) == normalize(stage_name);
+}
+} // namespace
 
 bool asst::MultiCopilotTaskPlugin::_run()
 {
@@ -103,7 +126,7 @@ bool asst::MultiCopilotTaskPlugin::navigate_to_stage(const std::string& stage_na
         task->special_params[5],
     };
     auto stages = find_stage(image, threshold_low, threshold_high);
-    auto it = std::ranges::find_if(stages, [&](const OcrPack::Result& r) { return r.text == stage_name; });
+    auto it = std::ranges::find_if(stages, [&](const OcrPack::Result& r) { return stage_name_eq(r.text, stage_name); });
     if (it != stages.end()) {
         if (enter_stage(it->rect, stage_name)) {
             return true;
@@ -114,7 +137,7 @@ bool asst::MultiCopilotTaskPlugin::navigate_to_stage(const std::string& stage_na
     sleep(Config.get_options().task_delay);
     image = ctrler()->get_image();
     stages = find_stage(image, threshold_low, threshold_high);
-    it = std::ranges::find_if(stages, [&](const OcrPack::Result& r) { return r.text == stage_name; });
+    it = std::ranges::find_if(stages, [&](const OcrPack::Result& r) { return stage_name_eq(r.text, stage_name); });
     if (it != stages.end()) {
         if (enter_stage(it->rect, stage_name)) {
             return true;
@@ -129,7 +152,7 @@ bool asst::MultiCopilotTaskPlugin::navigate_to_stage(const std::string& stage_na
         sleep(Config.get_options().task_delay);
         image = ctrler()->get_image();
         stages = find_stage(image, threshold_low, threshold_high);
-        it = std::ranges::find_if(stages, [&](const OcrPack::Result& r) { return r.text == stage_name; });
+        it = std::ranges::find_if(stages, [&](const OcrPack::Result& r) { return stage_name_eq(r.text, stage_name); });
         if (it != stages.end()) {
             if (enter_stage(it->rect, stage_name)) {
                 return true;
@@ -146,7 +169,7 @@ bool asst::MultiCopilotTaskPlugin::navigate_to_stage(const std::string& stage_na
         sleep(Config.get_options().task_delay);
         image = ctrler()->get_image();
         stages = find_stage(image, threshold_low, threshold_high);
-        it = std::ranges::find_if(stages, [&](const OcrPack::Result& r) { return r.text == stage_name; });
+        it = std::ranges::find_if(stages, [&](const OcrPack::Result& r) { return stage_name_eq(r.text, stage_name); });
         if (it != stages.end()) {
             if (enter_stage(it->rect, stage_name)) {
                 return true;
@@ -159,12 +182,17 @@ bool asst::MultiCopilotTaskPlugin::navigate_to_stage(const std::string& stage_na
 
 bool asst::MultiCopilotTaskPlugin::enter_stage(const Rect rect, const std::string& stage_name)
 {
-    ctrler()->click(rect);
-    sleep(Config.get_options().task_delay);
-    auto image_entered = ctrler()->get_image();
-    if (is_stage_detail_opened(image_entered)) { // 关卡介绍已展开
+    // 窗口未激活时第一次点击可能被客户端的激活流程吞掉（详情面板未展开），
+    // 点击后确认面板真的打开了，没打开就补点
+    for (int i = 0; i < 3; ++i) {
+        ctrler()->click(rect);
         sleep(Config.get_options().task_delay);
-        return confirm_stage_name(image_entered, stage_name);
+        auto image_entered = ctrler()->get_image();
+        if (is_stage_detail_opened(image_entered)) { // 关卡介绍已展开
+            sleep(Config.get_options().task_delay);
+            return confirm_stage_name(image_entered, stage_name);
+        }
+        Log.info(__FUNCTION__, "stage detail not opened after click, retry", i + 1);
     }
 
     return false;
@@ -207,7 +235,7 @@ bool asst::MultiCopilotTaskPlugin::confirm_stage_name(const cv::Mat& image, cons
 {
     const auto ocr_check = [&](const OCRer::ResultsVecOpt& ret_opt) {
         return ret_opt.has_value() &&
-               std::ranges::any_of(ret_opt.value(), [&](const OcrPack::Result& r) { return r.text == stage_name; });
+               std::ranges::any_of(ret_opt.value(), [&](const OcrPack::Result& r) { return stage_name_eq(r.text, stage_name); });
     };
     OCRer ocr(image);
     ocr.set_task_info("ClickedCorrectStage");
