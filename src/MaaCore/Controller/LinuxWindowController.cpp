@@ -209,16 +209,16 @@ bool LinuxWindowController::click(const Point& p)
 
 bool LinuxWindowController::is_battle_start_button(const Point& p) const
 {
-    // 720p 识别空间中关卡界面 Start 按钮的区域（OCR 实测按钮在 1151,645,53,27）。
-    // click() 收到的是窗口坐标（ControlScaleProxy 已按窗口分辨率缩放），
-    // 因此按实际窗口尺寸换算区域。
+    // 720p 识别空间中的“开始类”按钮区域（实测：关卡界面 Start 1151,645；
+    // 编队界面 MISSION START 1061,499,86,55）。均为一次性流程点击，
+    // 被激活吞点击后无重试兜底。click() 收到的是窗口坐标
+    // （ControlScaleProxy 已按窗口分辨率缩放），按实际窗口尺寸换算区域。
     if (m_width <= 0 || m_height <= 0) {
         return false;
     }
     const double sx = static_cast<double>(m_width) / 1280.0;
     const double sy = static_cast<double>(m_height) / 720.0;
-    return p.x >= static_cast<int>(1100 * sx) && p.y >= static_cast<int>(600 * sy) &&
-           p.y <= static_cast<int>(700 * sy);
+    return p.x >= static_cast<int>(1000 * sx) && p.y >= static_cast<int>(480 * sy);
 }
 
 bool LinuxWindowController::window_focused() const
