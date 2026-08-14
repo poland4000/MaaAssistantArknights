@@ -88,7 +88,7 @@ int main(int argc, char** argv)
     printf("uuid: %s\n", uuid);
 
     AsstAsyncScreencap(handle, 1);
-    if (save_png("/home/poland/maa-work/shots/ctrl_before.png", handle) != 0) {
+    if (save_png("ctrl_before.png", handle) != 0) {
         fprintf(stderr, "screencap failed\n");
         AsstDestroy(handle);
         return 1;
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
         AsstAsyncCallId click_id = AsstAsyncClick(handle, x, y, 1 /* block */);
         printf("click call id=%d\n", (int)click_id);
         AsstAsyncScreencap(handle, 1);
-        save_png("/home/poland/maa-work/shots/ctrl_after.png", handle);
+        save_png("ctrl_after.png", handle);
     }
 
     AsstDestroy(handle);

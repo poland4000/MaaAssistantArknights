@@ -19,7 +19,7 @@ DISPLAY=:0 ./lwtest <MAA> Arknights [click_x click_y]
 - 第二个参数为窗口标题（完全匹配），如 `Arknights`
 - 可选 `click_x click_y`：以 MAA 内部坐标（1280×720 空间）执行一次点击，用于验证输入链路
 
-输出截图保存到 `/home/poland/maa-work/shots/ctrl_before.png` / `ctrl_after.png`（测试用途，可按需修改路径）。
+输出截图保存到当前目录的 `ctrl_before.png` / `ctrl_after.png`（测试用途，可按需修改路径）。
 
 ## 焦点行为
 
