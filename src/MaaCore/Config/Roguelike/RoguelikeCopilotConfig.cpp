@@ -12,6 +12,8 @@ bool asst::RoguelikeCopilotConfig::load(const std::filesystem::path& path)
     LogTraceFunction;
 
     bool ret = true;
+    // 保存/恢复开关状态，避免覆盖 MAA_LOG_TRACE=0 的禁用
+    const bool trace_was_enabled = Logger::level::trace.is_enabled();
     Logger::level::trace.set_enabled(false);
     for (auto& entry : std::filesystem::recursive_directory_iterator(path)) {
         if (!entry.is_regular_file() || entry.path().extension() != ".json") {
@@ -19,7 +21,7 @@ bool asst::RoguelikeCopilotConfig::load(const std::filesystem::path& path)
         }
         ret &= AbstractConfig::load(entry.path());
     }
-    Logger::level::trace.set_enabled(true);
+    Logger::level::trace.set_enabled(trace_was_enabled);
     return ret;
 }
 
