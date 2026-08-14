@@ -573,22 +573,26 @@ void LinuxWindowController::guard_input_focus(const std::function<void()>& actio
     }
 
     // Wine 会把发给非活动窗口的合成点击当作“用户点击”，随后请求激活/抢占焦点，
-    // KWin 的防焦点窃取挡不住它（点击携带了新鲜的 user time）。
-    // 因此在合成输入前记录当前焦点窗口，若输入后游戏抢走了焦点就还回去，
-    // 保证无人值守时不会打断用户在其他窗口的输入。
+    // 新版 PC 客户端（2026-08）模拟 Windows 的“激活吞点击”行为：
+    // 非前台时到达的点击会被激活流程本身消耗掉（copilot 的 BattleStartPre
+    // 单次点击即被吞，导致后续流程错乱）。
+    // 对策：把“激活”与“点击”解耦——输入前先把焦点切到游戏（纯焦点变化
+    // 没有可吞的点击），此时游戏已是前台，Wine 不会再发起激活，点击必然
+    // 生效；输入完成后再把焦点还给用户原来的窗口。
     Window prev_focus = 0;
     int prev_revert = 0;
     XGetInputFocus(m_display, &prev_focus, &prev_revert);
 
+    const bool need_refocus = prev_focus != 0 && prev_focus != m_window && prev_focus != PointerRoot;
+    if (need_refocus) {
+        ensure_focus();
+        // 等焦点事件传播到 Wine/游戏，再发送输入
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
     action();
 
-    if (prev_focus == 0 || prev_focus == m_window || prev_focus == PointerRoot) {
-        return;
-    }
-    Window cur_focus = 0;
-    int cur_revert = 0;
-    XGetInputFocus(m_display, &cur_focus, &cur_revert);
-    if (cur_focus != m_window) {
+    if (!need_refocus) {
         return;
     }
     // 目标窗口可能已被销毁；先确认其仍然存在，避免 BadWindow 走默认错误处理
@@ -597,6 +601,8 @@ void LinuxWindowController::guard_input_focus(const std::function<void()>& actio
         return;
     }
     XSetInputFocus(m_display, prev_focus, RevertToParent, CurrentTime);
+    // 游戏被激活时会置顶；把用户原窗口也提回顶层，恢复原有遮挡关系
+    XRaiseWindow(m_display, prev_focus);
     XFlush(m_display);
 }
 
