@@ -173,6 +173,7 @@ class ConnectionsPage(QWidget):
     # ------------------------------------------------------------------ profiles
 
     def _reload_profiles(self):
+        maa.ensure_default_profile()
         current = self.profile_combo.currentText()
         self._profiles = maa.list_profiles()
         self.profile_combo.blockSignals(True)
@@ -223,6 +224,7 @@ class ConnectionsPage(QWidget):
     def save_profile(self):
         name = self.profile_combo.currentText()
         if not name:
+            QMessageBox.warning(self, "Save profile", "No profile selected — create one with New… first.")
             return
         values: dict[str, str | int | float | bool] = {
             "connection.preset": self.preset.currentText().strip(),
@@ -239,7 +241,13 @@ class ConnectionsPage(QWidget):
             "instance_options.adb_lite_enabled": self.adb_lite.currentText() == "true",
             "instance_options.kill_adb_on_exit": self.kill_adb.currentText() == "true",
         }
-        maa.set_profile_fields(name, values)
+        try:
+            maa.set_profile_fields(name, values)
+        except Exception as e:  # surface failures instead of failing silently
+            QMessageBox.critical(self, "Save profile", f"Failed to save '{name}':\n{e}")
+            return
+        self.device_label.setText(f"saved profile '{name}'")
+        self.device_label.setStyleSheet(f"color: {theme.OK};")
         self.check_device()
 
     def _new_profile(self):

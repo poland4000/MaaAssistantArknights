@@ -13,7 +13,7 @@ class AppState(QObject):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        self._profile = settings.value("profile", "gui-window")
+        self._profile = settings.value("profile", "default")
 
     @property
     def profile(self) -> str:

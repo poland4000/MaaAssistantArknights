@@ -115,6 +115,15 @@ def list_profiles() -> list[str]:
     return sorted(p.stem for p in d.iterdir() if p.suffix in (".toml", ".json", ".yaml", ".yml"))
 
 
+def ensure_default_profile() -> str:
+    """Create a ``default`` profile on first run so the GUI never starts with
+    an empty profile list. Returns the name of the profile to select."""
+    if not list_profiles():
+        write_profile("default", {"connection": {"preset": "", "window_name": "Arknights"}})
+        return "default"
+    return ""
+
+
 def read_profile(name: str) -> dict:
     path = profiles_dir() / f"{name}.toml"
     if not path.is_file():

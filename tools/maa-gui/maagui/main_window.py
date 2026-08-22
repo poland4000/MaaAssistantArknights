@@ -204,6 +204,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ state
 
     def _reload_profiles(self):
+        maa.ensure_default_profile()
         names = maa.list_profiles()
         current = self.state.profile
         self.profile_combo.blockSignals(True)
