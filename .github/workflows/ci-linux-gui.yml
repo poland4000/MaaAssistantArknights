@@ -84,14 +84,12 @@ jobs:
           chmod +x "$dist/launcher.sh" "$dist/toggle-pc-pack.sh" "$dist/maa" \
                   "$dist/gui/run.sh" "$dist/gui/run-maagui2.sh"
 
-      - name: Zip bundle
-        run: |
-          cd dist
-          zip -qr "maa-linux-gui-${{ github.sha }}.zip" maa-linux
-
       - name: Upload bundle
+        # upload the bundle directory, not a pre-zipped file: GitHub wraps
+        # artifact contents in a zip on download, so shipping a zip caused a
+        # "zip in a zip" — one download now unzips straight into maa-linux/
         uses: actions/upload-artifact@v7
         with:
           name: maa-linux-gui
-          path: dist/maa-linux-gui-*.zip
+          path: dist/maa-linux
           if-no-files-found: error

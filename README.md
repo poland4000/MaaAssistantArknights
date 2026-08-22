@@ -84,7 +84,8 @@ is *not* PR-ready for upstream yet.*
 **Use the CI bundle** (Actions → `build-linux-gui` → artifact `maa-linux-gui`):
 
 ```sh
-unzip maa-linux-gui-*.zip -d maa-linux
+# the artifact download is one zip containing the maa-linux/ bundle
+unzip maa-linux-gui.zip -d .
 cd maa-linux
 ./launcher.sh                # GUI; uses the bundled maa, libs, resources
 ```
