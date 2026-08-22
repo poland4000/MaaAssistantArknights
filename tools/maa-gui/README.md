@@ -55,6 +55,11 @@ resource pack.
   window controller: main-menu entry buttons, raid/challenge difficulty
   switch, Infrast room labels. It is loaded automatically for the `Window`
   connection preset.
+  **Disabling it:** the templates were tuned on an HDR display; on SDR
+  screens the default (Android-tuned) templates may match better. Run
+  `./toggle-pc-pack.sh off` (from a repo checkout *or* the bundle), or set
+  `MAA_PC_PACK=0` when launching the bundle. `on` restores it. Systems using
+  ADB/Waydroid presets never load the pack and don't need this.
 - The controller parks the in-game cursor at a fixed spot after clicks so the
   main-menu parallax effect doesn't destabilize template matching; the
   Performance tab in MaaGui2 lets you throttle how often the battle loop
