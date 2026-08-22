@@ -45,12 +45,14 @@ jobs:
         env:
           CLICOLOR_FORCE: 1
 
-      - name: Download maa-cli
-        uses: robinraju/release-downloader@v1
-        with:
-          repository: MaaAssistantArknights/maa-cli
-          latest: true
-          fileName: 'maa_cli-*-x86_64-unknown-linux-gnu.tar.gz'
+      - name: Build maa-cli (window-preset fork)
+        # upstream maa-cli does not ship the Window connection preset yet; the
+        # bundle must use the fork branch that adds it (poland4000/maa-cli@feat/window-preset)
+        run: |
+          git clone --depth 1 --branch feat/window-preset https://github.com/poland4000/maa-cli.git maa-cli-src
+          cd maa-cli-src
+          cargo build --release --locked --package maa-cli --features git2/vendored-openssl
+          cp target/release/maa "$GITHUB_WORKSPACE/maa"
 
       - name: Assemble self-contained bundle
         shell: bash
@@ -63,17 +65,20 @@ jobs:
           # maa-cli's data-dir contract: $DATA/{lib/*.so, MaaResource/resource,...}
           find install -name '*.so*' -exec cp -t "$dist/lib/" {} +
           cp -r install/resource "$dist/MaaResource/"
+          # sibling resource dir so maa-cli's find_resource() succeeds without
+          # the benign "Resource directory not found" warning
+          ln -s MaaResource/resource "$dist/resource"
 
-          # maa-cli CLI binary (release tar.gz contains a top-level `maa`)
-          tar -xzf maa_cli-*.tar.gz
-          find . -maxdepth 2 -type f -name maa -exec cp {} "$dist/maa" \;
+          # maa-cli CLI binary (built from the window-preset fork above)
+          cp "$root/maa" "$dist/maa"
 
           # GUI (both variants) + the bundle launcher
           cp -r tools/maa-gui/maagui tools/maa-gui/maagui2 "$dist/gui/"
           cp tools/maa-gui/run.sh tools/maa-gui/run-maagui2.sh "$dist/gui/"
           cp tools/maa-gui/launcher.sh "$dist/"
+          cp tools/maa-gui/toggle-pc-pack.sh "$dist/"
           cp tools/maa-gui/README.md "$dist/README.md"
-          chmod +x "$dist/launcher.sh" "$dist/maa" \
+          chmod +x "$dist/launcher.sh" "$dist/toggle-pc-pack.sh" "$dist/maa" \
                   "$dist/gui/run.sh" "$dist/gui/run-maagui2.sh"
 
       - name: Zip bundle
