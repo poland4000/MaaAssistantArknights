@@ -41,6 +41,125 @@ MAA 的意思是 MAA Assistant Arknights
 
 </div>
 
+## FORK: Linux X11 window-client automation
+
+This fork adds a **Windows-style window controller for Linux**: MAA attaches to
+the Arknights **PC client** (YoStar EN, running under Wine/Proton) by window
+title and drives it with **synthetic X11 input — the mouse cursor is never
+moved**. Everything else (tasks, resource packs, CLI, GUI) works on top of
+that.
+
+*Caveat for a wild world: this fork is a personal, working experiment. It
+has been verified on one machine (Fedora/KWin, 1920×1080, EN client, HDR).
+It is *not* battle-tested across distros, GPUs, or display setups, and it
+is *not* PR-ready for upstream yet.*
+
+### What this fork adds
+
+- `LinuxWindowController` (X11): attach by exact window title, screencap via
+  `XGetImage`, click/swipe via `XSendEvent`. No cursor relocation — the game
+  window stays exactly where you left it. Keyboard input works, and a
+  `focus_for_keys` flag can move input focus to the game before key events.
+- **Activation-click handling**: the 2026-08 EN client swallows the click
+  that activates an unfocused window. Start-button clicks are re-sent when
+  the window is unfocused; menu-entry and stage-navigation clicks self-heal
+  via re-detection.
+- **Cursor parking**: after every click, the in-game cursor is parked at a
+  fixed spot (bottom-left, near the BREAKING NEWS banner). The main menu has
+  a cursor-following parallax ("gyroscope") effect; parking keeps template
+  scores stable instead of drifting with the last click position.
+- **`platform_diff/pc` resource pack**: PC-captured templates + task
+  overrides for the windowed client — main-menu entry buttons, raid/challenge
+  mode switch (red "Start Challenge" button), Infrast facilities, battle-loop
+  screencap throttling. Auto-loaded when the connection preset is `Window`.
+- **Two GUIs** (`tools/maa-gui`): the classic tabbed `maagui` and the
+  MAA-styled `maagui2` (settings tabs, screencap-interval knob, PRTS search).
+- **Self-contained CI bundle**: a zip with libMaaCore + libMaaUtils, the
+  full MaaResource (incl. the pc pack), the **fork's maa-cli** (see below —
+  upstream's does *not* know the `Window` preset), both GUIs, and a
+  `launcher.sh`.
+
+### Setup
+
+**Use the CI bundle** (Actions → `build-linux-gui` → artifact `maa-linux-gui`):
+
+```sh
+unzip maa-linux-gui-*.zip -d maa-linux
+cd maa-linux
+./launcher.sh                # GUI; uses the bundled maa, libs, resources
+```
+
+`launcher.sh` points `MAA_DATA_DIR`/`MAA_CONFIG_DIR`/`MAA_CACHE_DIR` at the
+bundle, so profiles and task files land in `./config` next to it. Required:
+a Linux display (X11 or XWayland) and Python 3.10+ with PySide6
+(`pip install --user PySide6`).
+
+**Build from source**: follow the upstream Linux build guide; you additionally
+need `libx11-dev` (X11 headers) so the controller gets compiled in. MaaCore
+attaches via the `AsstAttachWindowByName` API.
+
+**maa-cli note**: the `Window` connection preset lives in
+[poland4000/maa-cli](https://github.com/poland4000/maa-cli) `feat/window-preset`.
+Upstream maa-cli ignores the preset (`Unknown connection preset: Window`) and
+falls back to ADB, so *the fork maa-cli is required* for window control. The
+CI bundle builds it for you.
+
+**First run (GUI)**: Connections tab → profile `default` is auto-created.
+Set **Preset = `Window`**, **Window title = `Arknights`**, **Global resource =
+`YoStarEN`** (default), Save. Check device should find the window.
+
+### Arknights client settings (important)
+
+- **UI scale 100%** (game display settings) — any scaling breaks every
+  template.
+- **Windowed, 1920×1080** (launcher settings). MAA requires exactly 16:9 and
+  at least 1280×720; a non-16:9 window (e.g. 1920×1052 with decorations)
+  fails attach. Use the launcher's resolution list, not arbitrary resizing.
+- **Must be a real window**: never minimized (controller can't capture an
+  unmapped window), never compositor-overlay fullscreen. Covered by other
+  windows is fine.
+- **Cursor at bottom-left before starting dailies**: MAA parks the in-game
+  cursor to the bottom-left corner (720p ≈ 8,668 — near the BREAKING NEWS
+  marker) after every click. Templates were captured with the cursor there,
+  so before the *first* run after launching the game, leave the in-game
+  cursor at bottom-left (or just start — detection retries settle the
+  parallax after the first click parks it).
+
+### HDR / SDR and the pc resource pack
+
+The `platform_diff/pc` templates were **captured on an HDR display**. On an
+SDR screen, template scores drop and some screens (raid switch especially)
+may fail.
+
+- **Workaround**: `./toggle-pc-pack.sh off` (repo or bundle) drops the pack
+  and falls back to MAA's default Android-tuned templates;
+  `MAA_PC_PACK=0 ./launcher.sh` does it for one session; `on` restores.
+- **Honest statement**: toggling off is a fallback, not a real SDR config —
+  the base pack lacks windowed-client-specific templates (EN Terminal,
+  challenge-mode Start, raid switch), so those screens go half-blind. Making
+  SDR a first-class citizen requires **re-capturing the pc pack on an SDR
+  machine** (controller screenshots, not Spectacle — cross-pipeline captures
+  score ~0.6). If you do this, PR the templates back and the HDR capture
+  issue goes away for everyone.
+
+### Known limitations
+
+- **X11 only for the window controller** (XGetImage + XSendEvent). Native
+  Wayland windows need a future PipeWire/uinput path; Wine/Proton windows
+  under XWayland work (that's what this was built against).
+- **Battles**: the roguelike/copilot/SSS fight loops are throttled via the
+  pc-pack `config.json` (defaults: roguelike 100 ms, copilot/SSS 33 ms) to
+  keep CPU sane with ~10 ms screenshots; lower if a mission misses a timing
+  window, raise if CPU is a concern (GUI Performance tab in `maagui2`).
+  MAA's recognition must be able to read the PC renders — it was tuned on
+  this one machine.
+- **One run at a time**, same as upstream (the device is busy).
+- **Language**: GUIs and resource overrides target the EN client; CN/JP/KR
+  clients work with the matching `global_resource` but the pc-pack overrides
+  assume the EN layout.
+- **Network**: PRTS search and `maa://` copilot download need network access
+  at run time.
+
 ## 下载与安装
 
 请阅读 [文档](https://docs.maa.plus/zh-cn/manual/newbie.html) 后前往 [官网](https://maa.plus) 或 [Releases](https://github.com/MaaAssistantArknights/MaaAssistantArknights/releases) 下载，并参考 [新手上路](https://docs.maa.plus/zh-cn/manual/newbie.html) 进行安装。
