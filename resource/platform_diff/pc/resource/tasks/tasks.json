@@ -1,0 +1,157 @@
+{
+  "ChangeToRaidDifficulty": {
+    "template": [
+      "RaidDifficulty.png",
+      "RaidDifficulty-Chapter15.png"
+    ],
+    "roi": [
+      600,
+      610,
+      250,
+      95
+    ],
+    "postDelay": 1000,
+    "templThreshold": 0.65
+  },
+  "ChangeToNormalDifficulty": {
+    "template": [
+      "NormalDifficulty.png",
+      "NormalDifficulty-Chapter15.png"
+    ],
+    "roi": [
+      600,
+      610,
+      250,
+      95
+    ],
+    "postDelay": 1000,
+    "templThreshold": 0.6
+  },
+  "RaidConfirm": {
+    "template": [
+      "PC-RedStart.png"
+    ],
+    "roi": [
+      1130,
+      630,
+      100,
+      60
+    ],
+    "templThreshold": 0.7
+  },
+  "StageNavigationSlowlySwipeLeft": {
+    "postDelay": 200
+  },
+  "ChapterSlowlySwipeToTheRight": {
+    "postDelay": 200
+  },
+
+  "Fight": {
+    "template": "Default/Terminal.png",
+    "roi": [844, 58, 268, 272],
+    "action": "ClickSelf",
+    "postDelay": 500,
+    "sub": []
+  },
+  "Recruit": {
+    "template": "Default/Recruit.png",
+    "roi": [925, 425, 200, 150],
+    "action": "ClickSelf",
+    "postDelay": 500,
+    "sub": []
+  },
+  "Award": {
+    "template": "Default/Task.png",
+    "roi": [700, 530, 230, 190],
+    "action": "ClickSelf",
+    "postDelay": 500,
+    "sub": []
+  },
+  "Visit": {
+    "template": "Default/Friends.png",
+    "roi": [250, 500, 200, 200],
+    "action": "ClickSelf",
+    "postDelay": 500,
+    "sub": []
+  },
+  "Mall": {
+    "template": "Default/Mall.png",
+    "roi": [772, 407, 186, 171],
+    "action": "ClickSelf",
+    "postDelay": 500,
+    "sub": []
+  },
+  "Infrast": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180],
+    "action": "ClickSelf",
+    "postDelay": 500,
+    "sub": []
+  },
+  "Depot": {
+    "template": "Default/DepotEnter.png",
+    "roi": [1109, 560, 171, 160],
+    "action": "ClickSelf",
+    "postDelay": 500,
+    "sub": []
+  },
+  "OperBox": {
+    "template": "Default/OperBoxEnter.png",
+    "roi": [935, 300, 265, 110],
+    "action": "ClickSelf",
+    "postDelay": 500,
+    "sub": []
+  },
+  "Gacha": {
+    "template": "Default/GachaEnter.png",
+    "roi": [1052, 426, 228, 174],
+    "action": "ClickSelf",
+    "postDelay": 500,
+    "sub": []
+  },
+
+  "StageQueue": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  },
+  "SwitchAccount": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  },
+  "StartAtHome": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  },
+  "StartUp": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  },
+  "Home": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  },
+  "MailReturnToHome": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  },
+  "MiningActivitiesReturnHome": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  },
+  "OrundumActivitiesReturnHome": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  },
+  "RecruitingActivitiesReturnHome": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  },
+  "SpecialAccessActivitiesReturnHome": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  },
+  "Store@EnterStore": {
+    "template": "Default/EnterInfrast.png",
+    "roi": [930, 540, 230, 180]
+  }
+}

@@ -1,0 +1,89 @@
+name: build-linux-gui
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/linux-window-controller
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build MaaCore + bundle GUI (x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          show-progress: false
+
+      - name: Fetch submodules
+        shell: bash
+        run: bash ./.github/scripts/sync-optional-submodules.sh --init --depth 1 src/MaaUtils 3rdparty/EmulatorExtras src/maa-cli
+
+      - name: Cache MaaDeps
+        id: cache-maadeps
+        uses: actions/cache@v6
+        continue-on-error: true
+        with:
+          path: ./src/MaaUtils/MaaDeps
+          key: ${{ runner.os }}-x64-maadeps-${{ hashFiles('tools/maadeps-download.py') }}
+
+      - name: Bootstrap MaaDeps
+        if: steps.cache-maadeps.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/maadeps-download.py x64-linux
+
+      - name: Configure, build and install
+        run: |
+          cmake --preset linux-publish-x64 -DMAA_HASH_VERSION='${{ github.sha }}'
+          cmake --build --preset linux-publish-x64 --parallel $(nproc)
+          cmake --install build --prefix "$GITHUB_WORKSPACE/install" --config RelWithDebInfo
+        env:
+          CLICOLOR_FORCE: 1
+
+      - name: Download maa-cli
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: MaaAssistantArknights/maa-cli
+          latest: true
+          fileName: 'maa_cli-*-x86_64-unknown-linux-gnu.tar.gz'
+
+      - name: Assemble self-contained bundle
+        shell: bash
+        run: |
+          set -euxo pipefail
+          root="$GITHUB_WORKSPACE"
+          dist="$root/dist/maa-linux"
+          mkdir -p "$dist/lib" "$dist/MaaResource" "$dist/gui"
+
+          # maa-cli's data-dir contract: $DATA/{lib/*.so, MaaResource/resource,...}
+          find install -name '*.so*' -exec cp -t "$dist/lib/" {} +
+          cp -r install/resource "$dist/MaaResource/"
+
+          # maa-cli CLI binary (release tar.gz contains a top-level `maa`)
+          tar -xzf maa_cli-*.tar.gz
+          find . -maxdepth 2 -type f -name maa -exec cp {} "$dist/maa" \;
+
+          # GUI (both variants) + the bundle launcher
+          cp -r tools/maa-gui/maagui tools/maa-gui/maagui2 "$dist/gui/"
+          cp tools/maa-gui/run.sh tools/maa-gui/run-maagui2.sh "$dist/gui/"
+          cp tools/maa-gui/launcher.sh "$dist/"
+          cp tools/maa-gui/README.md "$dist/README.md"
+          chmod +x "$dist/launcher.sh" "$dist/maa" \
+                  "$dist/gui/run.sh" "$dist/gui/run-maagui2.sh"
+
+      - name: Zip bundle
+        run: |
+          cd dist
+          zip -qr "maa-linux-gui-${{ github.sha }}.zip" maa-linux
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: maa-linux-gui
+          path: dist/maa-linux-gui-*.zip
+          if-no-files-found: error
