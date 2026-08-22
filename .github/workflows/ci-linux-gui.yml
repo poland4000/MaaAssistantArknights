@@ -37,6 +37,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/maadeps-download.py x64-linux
 
+      - name: Install X11 dev headers
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev
+
       - name: Configure, build and install
         run: |
           cmake --preset linux-publish-x64 -DMAA_HASH_VERSION='${{ github.sha }}'
