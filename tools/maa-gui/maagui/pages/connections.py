@@ -107,7 +107,7 @@ class ConnectionsPage(QWidget):
         self.touch_mode = combo_field(TOUCH_MODES, default_index=2)
         grid.addWidget(FieldRow("Touch mode", self.touch_mode), 1, 0)
 
-        self.global_resource = combo_field(RESOURCE_GLOBALS, editable=True)
+        self.global_resource = combo_field(RESOURCE_GLOBALS, editable=True, default_index=1)
         grid.addWidget(FieldRow("Global resource", self.global_resource,
                                 "YoStarEN / YoStarJP / YoStarKR for non-CN clients"), 1, 1)
 
@@ -213,7 +213,9 @@ class ConnectionsPage(QWidget):
         if gr in RESOURCE_GLOBALS:
             self.global_resource.setCurrentText(gr)
         else:
-            self.global_resource.setCurrentText(gr or "")
+            # this GUI targets the EN client; without a global pack, localized
+            # screens (recruit/mall/award) are read as CN and the runs stall
+            self.global_resource.setCurrentText("YoStarEN")
         self.cpu_ocr.setCurrentText("true" if stat.get("cpu_ocr", True) else "false")
         gpu = stat.get("gpu_ocr", "")
         self.gpu_ocr.setText("" if gpu in (None, "") else str(gpu))
