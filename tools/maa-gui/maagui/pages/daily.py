@@ -158,16 +158,17 @@ class DailyPage(QWidget):
         grid.setContentsMargins(12, 12, 12, 12)
 
         self.recruit_min_star = combo_field(
-            ["3★ — use tickets, recruit everything",
-             "4★ — conserve tickets for 4★+ (default)",
-             "5★ — only rare combos"], default_index=1)
+            ["3★ fallback — recruit 4★+, refresh 3★ rolls, take 3★ when refresh runs out",
+             "4★ — conserve tickets for 4★+ only",
+             "5★ — only rare combos"], default_index=0)
         self.recruit_min_star.currentIndexChanged.connect(
             self._on_min_star_changed)
         grid.addWidget(FieldRow(
             "Min star level to recruit",
             self.recruit_min_star,
-            "MaaCore only recruits a roll if its guaranteed rarity is in the "
-            "select/confirm level lists; 3★ mode disables tag refreshing"), 0, 0)
+            "4★+ rolls are always recruited immediately; 3★ rolls are "
+            "refreshed while refresh lasts (3★ fallback) and only recruited "
+            "when the game has no refreshes left"), 0, 0)
 
         self.recruit_times = spin_field(4, 0, 999)
         grid.addWidget(FieldRow("Times (0 = until all slots filled)", self.recruit_times), 0, 1)
@@ -197,21 +198,27 @@ class DailyPage(QWidget):
         return w
 
     def _on_min_star_changed(self, *_):
-        # refreshing a 3★ roll away defeats "use the tickets" mode
-        self.recruit_refresh.setEnabled(self.recruit_min_star.currentIndex() != 0)
+        # 3★ fallback mode always refreshes 3★ rolls — the checkbox is forced on
+        # and disabled; 4★/5★ conservation modes leave it to the user
+        fallback = self.recruit_min_star.currentIndex() == 0
+        self.recruit_refresh.setEnabled(not fallback)
+        self.recruit_refresh.setChecked(fallback)
 
     def recruit_params(self) -> dict:
         # MaaCore requires `select`/`confirm` arrays (guaranteed-rarity levels
-        # allowed to auto-select/auto-confirm); omitting them skips every roll
+        # allowed to auto-select/auto-confirm); omitting them skips every roll.
+        # With refresh=true, MAA only ever refreshes 3★ rolls (4★+ are recruited
+        # directly), so 3★ fallback = select/confirm everything + refresh: the
+        # 4★+ preference is preserved and 3★ becomes the no-refresh fallback.
         min_star = 3 + self.recruit_min_star.currentIndex()  # 3 / 4 / 5
         levels = list(range(min_star, 7))
         params: dict = {"select": levels, "confirm": levels}
         if self.recruit_times.value():
             params["times"] = self.recruit_times.value()
-        if min_star == 3:
-            params["refresh"] = False  # recruit the roll, don't re-roll it
-        elif self.recruit_refresh.isChecked():
+        if self.recruit_refresh.isChecked():
             params["refresh"] = True
+        elif min_star != 3:
+            params["refresh"] = False
         if self.recruit_first_tags.text().strip():
             params["first_tags"] = _split_tags(self.recruit_first_tags.text())
         params["extra_tags_mode"] = self.recruit_extra_mode.currentIndex()
