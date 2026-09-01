@@ -195,3 +195,56 @@ keyboard focus from your current app; when disabled, keys only work if the game 
 
 > Note: mouse clicks/swipes are delivered directly to the window via synthetic events and are not affected by
 > focus, so most MAA tasks (e.g. base management, farming) work without enabling this option.
+
+### Isolated Session via gamescope (Recommended)
+
+The plain window-control mode above has one weakness: Wine treats each synthetic click sent to an inactive
+window as a *user* click and asks the window manager to activate the game — on KDE/GNOME this raises the game
+window and steals focus mid-task. `guard_input_focus` restores focus afterwards, but the window still jumps.
+
+The clean fix is to run the game on its **own display server** via
+[gamescope](https://github.com/ValveSoftware/gamescope) (Valve's microcompositor, the Steam Deck session):
+the game becomes a client of gamescope's private X server, so its activation requests never reach your desktop
+compositor. Focus stealing becomes structurally impossible, while gamescope renders the game into a normal,
+viewable window on your desktop with full GPU acceleration. MAA attaches to the game *inside* gamescope and
+controls it while the gamescope window is completely unfocused.
+
+Use the bundled launcher:
+
+```shell
+tools/isolated-game/arknights-isolated.sh --profile gui-window
+```
+
+It will
+
+- detect your Steam Proton (e.g. GE-Proton11-3) and the Arknights compat prefix, and launch the game through
+  Proton exactly like Steam does (use `--plain-wine` for the system wine + `~/.wine` instead);
+- start gamescope at 1280×720 (MAA's native resolution) with the game forced to fill it exactly;
+- disable the Gamescope WSI layer for the game (`DISABLE_GAMESCOPE_WSI=1`): the layer adds direct scanout /
+  HDR passthrough but presents via a private protocol, so window screencap would only capture black pixels
+  (opt back in with `--wsi-layer`);
+- wait for the game window, then print (and with `--profile NAME` write into
+  `~/.config/maa/profiles/NAME.toml`) the window name to use, e.g. `":1:Arknights"`.
+
+Window-name syntax: an optional X display prefix — `":1:Arknights"`, `":1.0:Arknights"` or `"host:1:Arknights"`.
+Without a prefix the controller searches the process's own `DISPLAY` as before.
+
+Other options:
+
+- `--hidden` — run gamescope's headless backend: no window on the desktop at all (still GPU-composited,
+  MAA still controls the game). Switch visible ↔ hidden by stopping and relaunching.
+- `--stop` / `--status` — stop the isolated session / show its state.
+- `--res WxH`, `--scale WxH`, `--xvfb` — game resolution, on-screen window size, and a software-rendered
+  Xvfb fallback.
+
+Notes:
+
+- Keep the gamescope window **unminimized** while automating (minimized clients stop rendering and screencap
+  fails). Being covered by other windows is fine — and since the game is unfocused, its window can never
+  raise itself.
+- With the game isolated, `focus_for_keys` only moves focus *inside* gamescope, so it is harmless to enable.
+- On an isolated display MAA injects input as **real events via the XTest extension** (built when `libXtst`
+  is available): the virtual mouse pointer lives only inside gamescope — your desktop cursor is unaffected —
+  and the game treats every click as genuine, which eliminates Wine's "activation click swallowing" that
+  otherwise drops the first click after idle (recruit confirm/expedite failing intermittently). Without
+  XTest it falls back to synthetic events with an activation nudge before each click.

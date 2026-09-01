@@ -97,7 +97,11 @@ class ConnectionsPage(QWidget):
         self.conn_config = text_field("", "connection config (rarely changed)")
         grid.addWidget(FieldRow("Connection config", self.conn_config), 0, 3)
 
-        self.window_name = text_field("Arknights", "X11 window title for the Window preset")
+        self.window_name = text_field(
+            "Arknights",
+            "X11 window title; prefix the X display for isolated sessions "
+            "(\":1:Arknights\" — written automatically by arknights-isolated.sh)",
+        )
         grid.addWidget(FieldRow("Window title", self.window_name), 2, 3)
 
         self.focus_for_keys = combo_field(["false", "true"])

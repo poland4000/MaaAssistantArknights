@@ -190,3 +190,51 @@ AsstAsyncCallId id = AsstAsyncAttachWindowByName(handle, "Arknights", 0 /* focus
 开启后按键总能生效，但会把键盘焦点从你当前的应用夺走；关闭时按键仅在游戏窗口恰好聚焦时生效。
 
 > 提示：鼠标点击/滑动通过合成事件直接投递到窗口，不受焦点影响，因此绝大多数 MAA 任务（如基建、刷图）无需开启该选项。
+
+### 通过 gamescope 隔离运行（推荐）
+
+上面的窗口控制模式有一个弱点：Wine 会把发给非活动窗口的合成点击当作“用户点击”，请求窗口管理器激活游戏窗口——
+在 KDE/GNOME 上这会让游戏窗口前置并抢占焦点。控制器内置的 `guard_input_focus` 事后会归还焦点，
+但窗口仍会跳到前台。
+
+彻底的解决办法是让游戏运行在**独立的显示服务器**上：
+[gamescope](https://github.com/ValveSoftware/gamescope)（Valve 的微型合成器，即 Steam Deck 的游戏会话）。
+游戏成为 gamescope 私有 X server 的客户端，其窗口激活请求根本不会到达桌面合成器，
+抢焦点从机制上不再可能；同时 gamescope 以完整 GPU 加速把游戏渲染为桌面上的一个普通窗口。
+MAA 绑定到 gamescope **内部**的游戏窗口，即使 gamescope 窗口完全失焦也能正常控制。
+
+使用自带启动脚本：
+
+```shell
+tools/isolated-game/arknights-isolated.sh --profile gui-window
+```
+
+脚本会：
+
+- 自动检测 Steam 的 Proton（如 GE-Proton11-3）与明日方舟的 compat 前缀，并像 Steam 一样通过 Proton
+  启动游戏（`--plain-wine` 可改用系统 wine + `~/.wine`）；
+- 以 1280×720（MAA 原生分辨率）启动 gamescope，并强制游戏窗口恰好填满；
+- 为游戏禁用 Gamescope WSI layer（`DISABLE_GAMESCOPE_WSI=1`）：该 layer 提供直接扫描输出 / HDR 直通，
+  但走私有呈现协议，窗口截图只会得到黑屏（如需启用加 `--wsi-layer`）；
+- 等游戏窗口出现后，打印（`--profile NAME` 时同时写入 `~/.config/maa/profiles/NAME.toml`）
+  需要使用的窗口名，例如 `":1:Arknights"`。
+
+窗口名语法：可在标题前加 X 显示前缀——`":1:Arknights"`、`":1.0:Arknights"` 或 `"host:1:Arknights"`；
+不带前缀时与之前一样在进程自身的 `DISPLAY` 中查找。
+
+其他选项：
+
+- `--hidden` —— 使用 gamescope 无头后端：桌面完全不出现窗口（仍然 GPU 合成，MAA 照常控制游戏）。
+  可见 ↔ 隐藏通过 `--stop` 后重新启动切换。
+- `--stop` / `--status` —— 停止隔离会话 / 查看状态。
+- `--res WxH`、`--scale WxH`、`--xvfb` —— 游戏分辨率、桌面窗口尺寸、软件渲染的 Xvfb 回退。
+
+注意：
+
+- 自动化期间请保持 gamescope 窗口**不被最小化**（最小化后客户端停止渲染、截图失败）；
+  被其他窗口遮挡没有影响——游戏处于失焦状态，其窗口也永远无法自行前置。
+- 游戏被隔离后，`focus_for_keys` 只是在 gamescope 内部移动焦点，开启它不再有副作用。
+- 隔离显示上 MAA 通过 **XTest 扩展注入真实输入事件**（编译时检测到 `libXtst` 即启用）：虚拟鼠标指针
+  只存在于 gamescope 内部，不影响桌面光标；游戏把每次点击都当作真实点击处理，彻底消除 Wine 的
+  “激活点击吞没”（此前表现为空闲后的第一个合成点击偶尔失效，招募确认/加速随机失败）。无 XTest 时
+  回退为合成事件 + 每次点击前主动激活。

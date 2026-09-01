@@ -233,23 +233,29 @@ class MainWindow(QMainWindow):
         preset = str(conn.get("preset", ""))
         address = str(conn.get("address", ""))
         adb = str(conn.get("adb_path", ""))
+        window_name = str(conn.get("window_name", ""))
         self.device_dot.set_ok(None)
         self.device_label.setText("checking…")
 
         from PySide6.QtCore import QRunnable, QThreadPool, Slot
 
         class _Check(QRunnable):
-            def __init__(self, preset_, address_, adb_, cb):
+            def __init__(self, preset_, address_, adb_, window_name_, cb):
                 super().__init__()
-                self.preset_, self.address_, self.adb_, self.cb = preset_, address_, adb_, cb
+                self.preset_ = preset_
+                self.address_ = address_
+                self.adb_ = adb_
+                self.window_name_ = window_name_
+                self.cb = cb
 
             @Slot()
             def run(self):
-                ok, detail = maa.check_device(self.preset_, self.address_, self.adb_)
+                ok, detail = maa.check_device(
+                    self.preset_, self.address_, self.adb_, self.window_name_)
                 self.cb(ok, detail)
 
         QThreadPool.globalInstance().start(
-            _Check(preset, address, adb, self._on_device_result))
+            _Check(preset, address, adb, window_name, self._on_device_result))
 
     def _on_device_result(self, ok: bool, detail: str):
         self.device_dot.set_ok(ok)

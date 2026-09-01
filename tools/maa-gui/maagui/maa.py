@@ -380,17 +380,28 @@ def check_device(
     try:
         if preset.lower() == "window":
             name = window_name or "Arknights"
+            # Optional X display prefix (":1:Arknights") for gamescope/Xvfb
+            # isolated sessions — same syntax MaaCore's attach understands.
+            env = None
+            display = "DISPLAY"
+            m = re.match(
+                r"^((?::\d+(?:\.\d+)?|[A-Za-z0-9._-]+:\d+(?:\.\d+)?)):(.+)$", name
+            )
+            if m:
+                display = m.group(1)
+                env = {**os.environ, "DISPLAY": display}
+                name = m.group(2)
             try:
                 r = subprocess.run(
                     ["xdotool", "search", "--name", name],
-                    capture_output=True, text=True, timeout=10,
+                    capture_output=True, text=True, timeout=10, env=env,
                 )
             except FileNotFoundError:
                 return False, "xdotool not found (install xdotool)"
             wins = [ln for ln in r.stdout.splitlines() if ln.strip()]
             if not wins:
-                return False, f'no X11 window titled "{name}"'
-            return True, f'window "{name}" found ({(len(wins))} match(es))'
+                return False, f'no X11 window titled "{name}" on {display}'
+            return True, f'window "{name}" on {display} found ({(len(wins))} match(es))'
         if preset.lower() == "waydroid":
             r = subprocess.run(
                 ["waydroid", "status"], capture_output=True, text=True, timeout=10

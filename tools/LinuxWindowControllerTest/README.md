@@ -16,7 +16,8 @@ DISPLAY=:0 ./lwtest <MAA> Arknights [click_x click_y]
 ```
 
 - `<MAA>`: 仓库根目录（内含 `resource/`）
-- 第二个参数为窗口标题（完全匹配），如 `Arknights`
+- 第二个参数为窗口标题（完全匹配），如 `Arknights`；可带 X 显示前缀绑定隔离显示中的窗口，
+  如 `:1:Arknights`（gamescope/Xvfb 会话，见 `tools/isolated-game/arknights-isolated.sh`）
 - 可选 `click_x click_y`：以 MAA 内部坐标（1280×720 空间）执行一次点击，用于验证输入链路
 
 输出截图保存到当前目录的 `ctrl_before.png` / `ctrl_after.png`（测试用途，可按需修改路径）。
@@ -33,6 +34,18 @@ _NET_ACTIVE_WINDOW），KWin 的防焦点窃取挡不住它（点击携带新鲜
   键盘输入不受中断。
 - `focus_for_keys = true` 时不做干预，游戏保持持有焦点。
 
+## 隔离显示（gamescope）——抢焦点的根治方案
+
+上述方案都是在“游戏跑在桌面会话里”的前提下打补丁。根治方案是把游戏放进 gamescope
+（Valve 的嵌套微型合成器）：游戏成为 gamescope 私有 X server 的客户端，其激活请求
+永远不会到达桌面合成器，抢焦点从机制上不可能。MAA 用 `:1:Arknights` 这样的显示前缀
+绑定 gamescope 内部的窗口即可，游戏失焦、后台、被遮挡时输入与截图照常工作。
+
+启动/停止/状态：`tools/isolated-game/arknights-isolated.sh`（`--help` 查看全部选项；
+`--profile NAME` 自动把 `:N:Arknights` 写进 maa-cli profile）。实测：StartUp / Recruit /
+Infrast 全流程运行期间 KWin 状态零变化（supportInformation diff 为 0）。
+
+以下两个小节是隔离方案之前的历史补丁，仅在没有 gamescope 的环境下仍有用。
 
 ## 游戏窗口抢焦点问题（2026-08 客户端更新后）
 
