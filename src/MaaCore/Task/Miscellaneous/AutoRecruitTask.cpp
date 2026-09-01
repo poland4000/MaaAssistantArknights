@@ -12,6 +12,9 @@
 #include "Vision/OCRer.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
+#include <thread>
 #include <boost/regex.hpp>
 #include <ranges>
 
@@ -272,9 +275,16 @@ bool asst::AutoRecruitTask::_run()
             }
             else {
                 Log.info("Failed to use expedited plan");
-                // There is a small chance that confirm button were clicked twice and got stuck into
-                // the bottom-right slot. ref: #1491
-                if (check_recruit_home_page()) {
+                // 加速确认生效后，客户端可能先播放短转场/完成动画，主页短暂识别不到
+                //（也可能确认被吞/#1491 确认双击卡入右下槽位）；等待转场结束再判定，
+                // 避免把已成功的加速招募误判为失败并触发整链重试
+                // （重试会重新导航，产生多余的返回点击）
+                bool back_home = check_recruit_home_page();
+                for (int i = 0; !back_home && i < 4; ++i) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(800));
+                    back_home = check_recruit_home_page();
+                }
+                if (back_home) {
                     // ran out of expedited plan? stop trying
                     // however, there is another possibility (#7266: all the slots are empty now)
                     // if we can get another start btn, we still have a chance to continue
@@ -730,6 +740,27 @@ asst::AutoRecruitTask::calc_task_result_type asst::AutoRecruitTask::recruit_calc
             }
             for (int i = 0; i < minute_delta; ++i) {
                 ctrler()->click(image_analyzer.get_minute_decrement_rect());
+            }
+            // 合成点击偶发被吞（Wine 把空闲后的首个输入当激活处理），
+            // 定时器没变会导致整槽报废并触发上层的重试/加急循环；
+            // 这里读回当前小时数并补点，直到到达目标或重试上限
+            for (int adjust_retry = 0; adjust_retry < 3 && !check_timer(recruitment_time); ++adjust_retry) {
+                OCRer hour_ocr(ctrler()->get_image());
+                hour_ocr.set_task_info("RecruitTimerH");
+                hour_ocr.set_replace(Task.get<OcrTaskInfo>("NumberOcrReplace")->replace_map);
+                if (!hour_ocr.analyze() || hour_ocr.get_result().empty()) {
+                    break;
+                }
+                const int cur_hour = std::atoi(hour_ocr.get_result().front().text.c_str());
+                if (cur_hour < 1 || cur_hour > 9 || cur_hour == desired_hour) {
+                    break;
+                }
+                const int remaining_delta =
+                    cur_hour > desired_hour ? cur_hour - desired_hour : cur_hour - desired_hour + 9;
+                Log.warn("Recruit timer is at", cur_hour, "h, clicking decrement", remaining_delta, "more time(s)");
+                for (int i = 0; i < remaining_delta; ++i) {
+                    ctrler()->click(image_analyzer.get_hour_decrement_rect());
+                }
             }
         }
 

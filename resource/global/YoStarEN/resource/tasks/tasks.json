@@ -1217,6 +1217,10 @@
     "RecruitNow": {
         "text": ["Expedite"]
     },
+    "RecruitNowConfirm": {
+        "Doc": "加速确认后若槽位已完成，直接进入领取流程，避免完成动画期间 RecruitFlag 识别失败导致整链报错",
+        "next": ["RecruitFlag", "RecruitFinish", "RecruitNowConfirm"]
+    },
     "MiningActivities": {
         "text": ["Provisional", "Mining", "Permit"]
     },
