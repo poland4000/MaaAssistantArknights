@@ -56,10 +56,19 @@ is *not* PR-ready for upstream yet.*
 
 ### What this fork adds
 
-- `LinuxWindowController` (X11): attach by exact window title, screencap via
-  `XGetImage`, click/swipe via `XSendEvent`. No cursor relocation — the game
-  window stays exactly where you left it. Keyboard input works, and a
+- **`LinuxWindowController` (X11)**: attach by exact window title (optionally
+  prefixed with the X display, e.g. `:1:Arknights`, for gamescope/Xvfb
+  isolated sessions), screencap via `XGetImage`, click/swipe via synthetic
+  events — `XSendEvent` on the desktop, real `XTest` events inside isolated
+  displays (Wine swallows synthetic clicks there). No cursor relocation — the
+  game window stays exactly where you left it. Keyboard input works, and a
   `focus_for_keys` flag can move input focus to the game before key events.
+- **Isolated-session launcher** (`tools/isolated-game/arknights-isolated.sh`):
+  runs the PC client inside **gamescope** (Valve's microcompositor) or Xvfb,
+  via GE-Proton or wine — visible as a normal window on your desktop or fully
+  headless (`--hidden`). The game's focus-stealing activation requests never
+  reach your compositor, and the launcher writes the matching `window_name`
+  into the maa-cli profile automatically.
 - **Activation-click handling**: the 2026-08 EN client swallows the click
   that activates an unfocused window. Start-button clicks are re-sent when
   the window is unfocused; menu-entry and stage-navigation clicks self-heal
@@ -72,12 +81,17 @@ is *not* PR-ready for upstream yet.*
   overrides for the windowed client — main-menu entry buttons, raid/challenge
   mode switch (red "Start Challenge" button), Infrast facilities, battle-loop
   screencap throttling. Auto-loaded when the connection preset is `Window`.
-- **Two GUIs** (`tools/maa-gui`): the classic tabbed `maagui` and the
-  MAA-styled `maagui2` (settings tabs, screencap-interval knob, PRTS search).
+- **MaaGui3** (`tools/maa-gui`): a PySide6 GUI that mirrors the Windows (WPF)
+  MAA UI — Farming / Copilot / Toolbox / Settings, task checklist with
+  per-task General/Advanced settings, PRTS copilot search with operator
+  matching — plus Linux extras: gamescope game launch/close with a live
+  status bar, and the screencap performance knob. (`maagui`/`maagui2` remain
+  in-tree as earlier variants; `maagui` also serves as maagui3's backend
+  library.)
 - **Self-contained CI bundle**: a zip with libMaaCore + libMaaUtils, the
   full MaaResource (incl. the pc pack), the **fork's maa-cli** (see below —
-  upstream's does *not* know the `Window` preset), both GUIs, and a
-  `launcher.sh`.
+  upstream's does *not* know the `Window` preset), maagui3, the gamescope
+  launcher, and a `launcher.sh`.
 
 ### Setup
 
@@ -96,8 +110,9 @@ a Linux display (X11 or XWayland) and Python 3.10+ with PySide6
 (`pip install --user PySide6`).
 
 **Build from source**: follow the upstream Linux build guide; you additionally
-need `libx11-dev` (X11 headers) so the controller gets compiled in. MaaCore
-attaches via the `AsstAttachWindowByName` API.
+need `libx11-dev` and `libxtst-dev` (X11 + XTest headers) so the controller —
+including the XTest input injection for gamescope sessions — gets compiled
+in. MaaCore attaches via the `AsstAttachWindowByName` API.
 
 **maa-cli note**: the `Window` connection preset lives in
 [poland4000/maa-cli](https://github.com/poland4000/maa-cli) `feat/window-preset`.
@@ -105,9 +120,12 @@ Upstream maa-cli ignores the preset (`Unknown connection preset: Window`) and
 falls back to ADB, so *the fork maa-cli is required* for window control. The
 CI bundle builds it for you.
 
-**First run (GUI)**: Connections tab → profile `default` is auto-created.
-Set **Preset = `Window`**, **Window title = `Arknights`**, **Global resource =
-`YoStarEN`** (default), Save. Check device should find the window.
+**First run (GUI)**: Settings → Connection. Set **Preset = `Window`**,
+**Window title = `Arknights`** (or `:1:Arknights` when the game runs in a
+gamescope session launched from *Settings → Game*), **Global resource =
+`YoStarEN`** (default), Save. Check device should find the window. On the
+very first start the GUI inherits the profile last used by an older
+MaaGui/made for the Window preset automatically.
 
 ### Arknights client settings (important)
 
@@ -151,7 +169,7 @@ may fail.
 - **Battles**: the roguelike/copilot/SSS fight loops are throttled via the
   pc-pack `config.json` (defaults: roguelike 100 ms, copilot/SSS 33 ms) to
   keep CPU sane with ~10 ms screenshots; lower if a mission misses a timing
-  window, raise if CPU is a concern (GUI Performance tab in `maagui2`).
+  window, raise if CPU is a concern (maagui3 Settings → Performance).
   MAA's recognition must be able to read the PC renders — it was tuned on
   this one machine.
 - **One run at a time**, same as upstream (the device is busy).
