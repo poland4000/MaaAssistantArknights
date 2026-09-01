@@ -1083,20 +1083,12 @@
     },
     "CloseEventNewsPopup": {
         "algorithm": "OcrDetect",
-        "Doc": "主界面活动/新闻（Event/System/News）弹窗：由左上返回键坐标处的活动按钮误触打开，只能点右上角 X 关闭（点击空白处无效），且会挡住返回按钮与设置入口。OCR 识别弹窗页签确认弹窗在场，随后点击固定位置的 X。text 同时覆盖 EN/CN 客户端",
+        "Doc": "主界面活动/新闻（Event/System/News）弹窗：由左上返回键坐标处的活动按钮误触打开，只能点右上角 X 关闭（点击空白处无效），且会挡住返回按钮与设置入口。OCR 识别弹窗页签确认弹窗在场，随后点击固定位置的 X。text 同时覆盖 EN/CN 客户端。注意：本任务必须是终点（无 next）——它的 @前缀克隆会被内联进所有 ReturnButton 的 next 列表，任何 next 都可能打乱这些列表里 JustReturn 必须位于末位的语法约束",
         "text": ["Event", "System", "News", "活动", "系统", "公告"],
         "roi": [330, 80, 700, 90],
         "action": "ClickRect",
         "specificRect": [1181, 36, 52, 52],
-        "postDelay": 1000,
-        "next": [
-            "MainThemes#next",
-            "ReturnButtons#next",
-            "ReturnConfirm",
-            "ReturnButton@LoadingIcon",
-            "ReturnButton@LoadingText",
-            "CloseAnnos#next"
-        ]
+        "postDelay": 1000
     },
     "FromStageSN": {
         "template": "StageSNReturnFlag.png",
