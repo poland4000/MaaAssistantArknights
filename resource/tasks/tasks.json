@@ -1068,15 +1068,36 @@
         "templThreshold": [0.7, 0.7],
         "action": "ClickSelf",
         "roi": [0, 0, 180, 80],
+        "postDelay": 1000,
+        "Doc2": "postDelay 1s：返回点击后场景切换约需 1s；无延时时的重试循环会在转场动画帧上再次匹配到返回按钮，点击落到切换后的界面上——该坐标恰是主界面的活动/公告（Event/System/News）弹窗按钮，会打开只能靠右上角 X 关闭的弹窗（PC 端实测）",
         "next": [
             "MainThemes#next",
             "ReturnButtons#next",
             "ReturnConfirm",
+            "CloseEventNewsPopup",
             "ReturnButton@LoadingIcon",
             "ReturnButton@LoadingText",
             "CloseAnnos#next"
         ],
-        "onErrorNext": ["SwitchTheme@ToggleSettingsMenu"]
+        "onErrorNext": ["CloseEventNewsPopup", "SwitchTheme@ToggleSettingsMenu"]
+    },
+    "CloseEventNewsPopup": {
+        "algorithm": "OcrDetect",
+        "Doc": "主界面活动/新闻（Event/System/News）弹窗：由左上返回键坐标处的活动按钮误触打开，只能点右上角 X 关闭（点击空白处无效），且会挡住返回按钮与设置入口。OCR 识别弹窗页签确认弹窗在场，随后点击固定位置的 X。text 同时覆盖 EN/CN 客户端",
+        "text": ["Event", "System", "News", "活动", "系统", "公告"],
+        "roi": [330, 80, 700, 90],
+        "action": "ClickRect",
+        "specificRect": [1181, 36, 52, 52],
+        "postDelay": 1000,
+        "next": [
+            "MainThemes#next",
+            "ReturnButtons#next",
+            "ReturnConfirm",
+            "CloseEventNewsPopup",
+            "ReturnButton@LoadingIcon",
+            "ReturnButton@LoadingText",
+            "CloseAnnos#next"
+        ]
     },
     "FromStageSN": {
         "template": "StageSNReturnFlag.png",
