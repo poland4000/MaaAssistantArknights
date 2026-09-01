@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <chrono>
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -118,6 +119,7 @@ private:
     bool is_battle_start_button(const Point& p) const;
     bool window_focused() const;
     void park_cursor();
+    bool dismiss_popup_window();
 
 private:
     Display* m_display = nullptr;
@@ -126,6 +128,8 @@ private:
     int m_height = 0;
 
     bool m_focus_for_keys = false;
+    // 上次覆盖弹窗（"Form" 窗口）检查时间，用于节流
+    std::chrono::steady_clock::time_point m_last_popup_check{};
     // 绑定到隔离显示（gamescope/Xvfb，通过 ":1:Arknights" 这类显示前缀）时，
     // 桌面会话不受本显示影响：输入前主动把焦点交给游戏窗口，避免 Wine 把
     // 非活动窗口的首个合成点击当作激活点击吞掉（招募确认等一次性点击因此失败）

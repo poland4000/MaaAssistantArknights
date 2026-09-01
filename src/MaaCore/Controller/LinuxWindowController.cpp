@@ -197,6 +197,7 @@ bool LinuxWindowController::screencap(cv::Mat& image_payload, bool allow_reconne
         return false;
     }
 
+    dismiss_popup_window();
     return capture_window(image_payload);
 }
 
@@ -274,6 +275,8 @@ bool LinuxWindowController::click(const Point& p)
         return false;
     }
 
+    dismiss_popup_window();
+
     guard_input_focus([&]() {
         // 与 Win32Controller 对齐：down/up 之间保持一小段时间，游戏才能识别为完整点击
         constexpr int click_delay_ms = 50;
@@ -340,6 +343,71 @@ void LinuxWindowController::park_cursor()
     const int px = static_cast<int>(8.0 * m_width / 1280.0);
     const int py = static_cast<int>(668.0 * m_height / 720.0);
     send_motion(px, py, 0);
+}
+
+bool LinuxWindowController::dismiss_popup_window()
+{
+    // 2026-09 EN 客户端：活动/公告弹窗（Event/System/News）渲染在一个独立
+    // 的 "Form" 顶层窗口里 —— 与主窗口同尺寸、同位置 (0,0)、更晚创建，因而
+    // 叠在主窗口之上。主窗口截图里完全看不到它，但它的窗口区域会截走
+    // XTest 真实输入：MAA 对着主窗口旧画面点坐标，实际全落在弹窗上，
+    // 任务在不知不觉中卡死（弹窗只能点右上角 X 关闭，空白处无效）。
+    //
+    // 处理：每次截图/点击前枚举根窗口的子窗口，发现与主窗口同尺寸的
+    // 可见 "Form" 窗口即向其右上角 X（1280x720 基准 (1207, 62)，即
+    // 距右 73px、距顶 62px）注入一次点击把它关掉。XTest 事件按屏幕坐标
+    // 派发，天然落在覆盖窗口上。节流 2s；仅在 XTest（隔离显示）模式启用
+    // —— 桌面模式的 XSendEvent 直接发往主窗口，不受覆盖窗口拦截。
+    if (!m_use_xtest || m_width <= 0 || m_height <= 0 || m_display == nullptr) {
+        return false;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (now - m_last_popup_check < std::chrono::seconds(2)) {
+        return false;
+    }
+    m_last_popup_check = now;
+
+    Window ret_root = 0;
+    Window parent = 0;
+    Window* children = nullptr;
+    unsigned int n = 0;
+    if (XQueryTree(m_display, DefaultRootWindow(m_display), &ret_root, &parent, &children, &n) == 0) {
+        return false;
+    }
+    bool dismissed = false;
+    for (unsigned int i = 0; i < n && !dismissed; ++i) {
+        const Window w = children[i];
+        if (w == m_window) {
+            continue;
+        }
+        XWindowAttributes attr {};
+        if (XGetWindowAttributes(m_display, w, &attr) == 0 || attr.map_state != IsViewable) {
+            continue;
+        }
+        if (attr.width != m_width || attr.height != m_height) {
+            continue;
+        }
+        char* name = nullptr;
+        XFetchName(m_display, w, &name);
+        const bool is_form = name != nullptr && std::string(name) == "Form";
+        if (name != nullptr) {
+            XFree(name);
+        }
+        if (!is_form) {
+            continue;
+        }
+        const int px = attr.x + attr.width - static_cast<int>(73.0 * attr.width / 1280.0);
+        const int py = attr.y + static_cast<int>(62.0 * attr.height / 720.0);
+        Log.info("game overlay popup window detected (Form), dismissing at", px, ",", py);
+        send_button(ButtonPress, px, py, Button1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        send_button(ButtonRelease, px, py, Button1);
+        dismissed = true;
+    }
+    if (children != nullptr) {
+        XFree(children);
+    }
+    return dismissed;
 }
 
 bool LinuxWindowController::input(const std::string& text)
