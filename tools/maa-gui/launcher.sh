@@ -5,7 +5,7 @@
 # MaaResource (which carries the platform_diff/pc pack for the X11 window
 # controller), the bundled libMaaCore.so, and a dedicated writable config dir.
 #
-# Usage:  ./launcher.sh [maagui|maagui2]   (default: maagui2)
+# Usage:  ./launcher.sh            (maagui3 — the WPF-style GUI)
 #         MAA_PC_PACK=0 ./launcher.sh       disables the pc override pack
 #                                           (HDR-tuned; see toggle-pc-pack.sh)
 set -e
@@ -24,9 +24,9 @@ if [ -x "$HERE/toggle-pc-pack.sh" ] && [ "${MAA_PC_PACK:-1}" = "0" ]; then
     "$HERE/toggle-pc-pack.sh" off
 fi
 
-GUI="${1:-maagui2}"
-if [ "$GUI" != "maagui" ] && [ "$GUI" != "maagui2" ]; then
-    echo "unknown GUI '$GUI' (expected maagui or maagui2)" >&2
+GUI="maagui3"
+if [ "${1:-}" != "" ] && [ "${1:-}" != "$GUI" ]; then
+    echo "unknown GUI '$1' (this bundle ships maagui3 only)" >&2
     exit 1
 fi
 
