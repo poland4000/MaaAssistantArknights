@@ -38,7 +38,10 @@ jobs:
         run: python3 tools/maadeps-download.py x64-linux
 
       - name: Install X11 dev headers
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev
+        # libx11-dev: window controller screencap/input; libxtst-dev: XTest
+        # input injection used to drive the game inside gamescope/Xvfb
+        # isolated displays (see tools/isolated-game)
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxtst-dev
 
       - name: Configure, build and install
         run: |
@@ -75,14 +78,18 @@ jobs:
           # maa-cli CLI binary (built from the window-preset fork above)
           cp "$root/maa" "$dist/maa"
 
-          # GUI (both variants) + the bundle launcher
-          cp -r tools/maa-gui/maagui tools/maa-gui/maagui2 "$dist/gui/"
-          cp tools/maa-gui/run.sh tools/maa-gui/run-maagui2.sh "$dist/gui/"
+          # GUI: maagui3 (the WPF-style UI) plus the `maagui` package it uses
+          # as its maa-cli/PRTS backend library
+          cp -r tools/maa-gui/maagui tools/maa-gui/maagui3 "$dist/gui/"
+          cp tools/maa-gui/run-maagui3.sh "$dist/gui/"
+          # gamescope/Xvfb isolated-session launcher (GUI "Game" panel wraps it)
+          mkdir -p "$dist/isolated-game"
+          cp tools/isolated-game/arknights-isolated.sh "$dist/isolated-game/"
           cp tools/maa-gui/launcher.sh "$dist/"
           cp tools/maa-gui/toggle-pc-pack.sh "$dist/"
           cp tools/maa-gui/README.md "$dist/README.md"
           chmod +x "$dist/launcher.sh" "$dist/toggle-pc-pack.sh" "$dist/maa" \
-                  "$dist/gui/run.sh" "$dist/gui/run-maagui2.sh"
+                  "$dist/gui/run-maagui3.sh" "$dist/isolated-game/arknights-isolated.sh"
 
       - name: Upload bundle
         # upload the bundle directory, not a pre-zipped file: GitHub wraps
