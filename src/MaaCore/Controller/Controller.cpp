@@ -410,9 +410,11 @@ bool asst::Controller::attach_linux_window(const std::string& window_name, bool 
     m_controller_type = ControllerType::LinuxWindow;
     m_uuid = m_controller->get_uuid();
 
-    // 尝试截图
+    // 尝试截图；失败时不残留半连接状态（m_controller 已设但 proxy 缺失会导致
+    // 截图可用而点击全部失败的“僵尸连接”）
     if (!screencap()) {
         Log.error("Cannot screencap!");
+        clear_info();
         return false;
     }
 
@@ -433,11 +435,13 @@ bool asst::Controller::attach_linux_window(const std::string& window_name, bool 
     }
     catch (const std::exception& e) {
         Log.error("Cannot create controller proxy: {}", e.what());
+        clear_info();
         return false;
     }
 
     if (!m_scale_proxy) {
         Log.error("Cannot create controller proxy!");
+        clear_info();
         return false;
     }
 

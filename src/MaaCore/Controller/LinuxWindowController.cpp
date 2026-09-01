@@ -3,6 +3,7 @@
 #include "LinuxWindowController.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <sstream>
 #include <thread>
@@ -15,6 +16,54 @@
 
 namespace asst
 {
+// 解析 window_name 的 X 显示前缀（":1:Arknights" / ":1.0:Arknights" / "host:1:Arknights"）。
+// 无前缀或前缀不完整时原样返回标题（display 为空 → 使用进程的 DISPLAY）。
+static void split_display_prefix(const std::string& window_name, std::string& display, std::string& title)
+{
+    display.clear();
+    title = window_name;
+
+    size_t digits_pos = std::string::npos;
+    if (!window_name.empty() && window_name[0] == ':') {
+        digits_pos = 1;
+    }
+    else {
+        const size_t colon = window_name.find(':');
+        if (colon == std::string::npos || colon == 0) {
+            return;
+        }
+        digits_pos = colon + 1;
+    }
+
+    const auto is_digit = [](char c) {
+        return c >= '0' && c <= '9';
+    };
+
+    size_t i = digits_pos;
+    while (i < window_name.size() && is_digit(window_name[i])) {
+        ++i;
+    }
+    if (i == digits_pos) {
+        return;
+    }
+    if (i < window_name.size() && window_name[i] == '.') {
+        ++i;
+        const size_t frac_start = i;
+        while (i < window_name.size() && is_digit(window_name[i])) {
+            ++i;
+        }
+        if (i == frac_start) {
+            return;
+        }
+    }
+    if (i >= window_name.size() || window_name[i] != ':') {
+        return;
+    }
+
+    display = window_name.substr(0, i);
+    title = window_name.substr(i + 1);
+}
+
 LinuxWindowController::LinuxWindowController(const AsstCallback& callback [[maybe_unused]], Assistant* inst) :
     InstHelper(inst)
 {
@@ -38,22 +87,51 @@ bool LinuxWindowController::attach(const std::string& window_name, bool focus_fo
     m_inited = false;
     m_focus_for_keys = focus_for_keys;
 
+    std::string display_spec;
+    std::string title;
+    split_display_prefix(window_name, display_spec, title);
+    if (title.empty()) {
+        Log.error("Empty window title after display prefix:", window_name);
+        return false;
+    }
+    m_isolated = !display_spec.empty();
+    if (m_isolated) {
+        Log.info("Attaching on X display", display_spec, "window:", title);
+    }
+
     if (m_display != nullptr) {
         XCloseDisplay(m_display);
         m_display = nullptr;
     }
 
-    m_display = XOpenDisplay(nullptr);
+    m_display = XOpenDisplay(display_spec.empty() ? nullptr : display_spec.c_str());
     if (m_display == nullptr) {
-        Log.error("Failed to open X display");
+        Log.error("Failed to open X display", display_spec.empty() ? "(from DISPLAY)" : display_spec.c_str());
         return false;
     }
 
     // 静默 X11 错误，避免窗口被销毁等竞态打印大量错误
     XSetErrorHandler([](Display*, XErrorEvent*) -> int { return 0; });
 
-    if (!find_window(window_name)) {
-        Log.error("Failed to find window:", window_name);
+    // 隔离显示上启用 XTest 真实输入注入（扩展缺失时回退 XSendEvent 合成事件）
+    m_use_xtest = false;
+    if (m_isolated) {
+#if defined(ASST_WITH_XTEST)
+        int opcode = 0, first_event = 0, first_error = 0;
+        if (XQueryExtension(m_display, "XTEST", &opcode, &first_event, &first_error)) {
+            m_use_xtest = true;
+            Log.info("XTest extension available on isolated display, using real input injection");
+        }
+        else {
+            Log.warn("XTest extension unavailable on isolated display, falling back to synthetic events");
+        }
+#else
+        Log.warn("Built without XTest support, falling back to synthetic events");
+#endif
+    }
+
+    if (!find_window(title)) {
+        Log.error("Failed to find window:", title);
         return false;
     }
 
@@ -62,11 +140,26 @@ bool LinuxWindowController::attach(const std::string& window_name, bool focus_fo
         return false;
     }
 
-    // 尝试截图
+    // 尝试截图；游戏转场/切换分辨率瞬间窗口可能上报临时尺寸（如 1278x699），
+    // 直接交给上层分辨率校验会把一次瞬时抖动变成连接失败，这里重试至尺寸稳定
     cv::Mat image;
-    if (!capture_window(image)) {
-        Log.error("Failed to capture window");
-        return false;
+    for (int attempt = 0;; ++attempt) {
+        if (!refresh_geometry() || !capture_window(image)) {
+            Log.error("Failed to capture window");
+            return false;
+        }
+        constexpr double eps = 1e-3;
+        const bool size_ok = m_width >= 1280 && m_height >= 720 &&
+                             std::fabs(16.0 / 9.0 - static_cast<double>(m_width) / m_height) < eps;
+        if (size_ok) {
+            break;
+        }
+        if (attempt >= 19) {
+            Log.error("Window size stays unsupported:", m_width, "x", m_height);
+            return false;
+        }
+        Log.warn("Transient window size, retrying:", m_width, "x", m_height);
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
 
     std::stringstream ss;
@@ -195,7 +288,8 @@ bool LinuxWindowController::click(const Point& p)
         // Start 按钮）：点击被吞后流程继续但界面未变。菜单类任务有识别重试
         // 能自愈，Start 按钮则是单击即走。对这一区域补一次点击：
         // 第一次触发激活（被吞），第二次落在激活完成后，必然生效。
-        if (is_battle_start_button(p) && !window_focused()) {
+        // XTest 注入的是真实事件，不存在吞点击，无需补击
+        if (!m_use_xtest && is_battle_start_button(p) && !window_focused()) {
             Log.info("battle-start click while unfocused: sending a second click");
             std::this_thread::sleep_for(std::chrono::milliseconds(150));
             send_button(ButtonPress, p.x, p.y, Button1);
@@ -551,6 +645,18 @@ bool LinuxWindowController::refresh_geometry()
 
 void LinuxWindowController::send_button(int type, int x, int y, unsigned int button)
 {
+#if defined(ASST_WITH_XTEST)
+    // 隔离显示：XTest 注入真实事件。真实按键事件落在虚拟指针所在窗口，
+    // 游戏全屏占满隔离显示，先把指针移到目标点即可；Wine 无法把真实
+    // 事件当激活点击吞掉。虚拟指针只存在于隔离显示，不影响桌面光标
+    if (m_use_xtest) {
+        XTestFakeMotionEvent(m_display, -1, x, y, CurrentTime);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        XTestFakeButtonEvent(m_display, button, type == ButtonPress ? 1 : 0, CurrentTime);
+        XFlush(m_display);
+        return;
+    }
+#endif
     XButtonEvent ev = {};
     ev.type = type;
     ev.display = m_display;
@@ -574,8 +680,16 @@ void LinuxWindowController::send_button(int type, int x, int y, unsigned int but
     XFlush(m_display);
 }
 
-void LinuxWindowController::send_motion(int x, int y, unsigned int state)
+void LinuxWindowController::send_motion(int x, int y, unsigned int state [[maybe_unused]])
 {
+#if defined(ASST_WITH_XTEST)
+    // 拖动中的按钮掩码由 XTest 依据已按下的物理按键自动维护，无需显式 state
+    if (m_use_xtest) {
+        XTestFakeMotionEvent(m_display, -1, x, y, CurrentTime);
+        XFlush(m_display);
+        return;
+    }
+#endif
     XMotionEvent ev = {};
     ev.type = MotionNotify;
     ev.display = m_display;
@@ -596,7 +710,7 @@ void LinuxWindowController::send_motion(int x, int y, unsigned int state)
 
 void LinuxWindowController::send_key(KeySym keysym, bool press)
 {
-    if (m_focus_for_keys) {
+    if (m_focus_for_keys || (m_isolated && !window_focused())) {
         ensure_focus();
     }
 
@@ -606,6 +720,14 @@ void LinuxWindowController::send_key(KeySym keysym, bool press)
         return;
     }
 
+#if defined(ASST_WITH_XTEST)
+    // 真实键盘事件投递给当前聚焦窗口，上面的 ensure_focus 已保证聚焦
+    if (m_use_xtest) {
+        XTestFakeKeyEvent(m_display, keycode, press ? 1 : 0, CurrentTime);
+        XFlush(m_display);
+        return;
+    }
+#endif
     XKeyEvent ev = {};
     ev.type = press ? KeyPress : KeyRelease;
     ev.display = m_display;
@@ -620,8 +742,42 @@ void LinuxWindowController::send_key(KeySym keysym, bool press)
     XFlush(m_display);
 }
 
+// 发送 _NET_ACTIVE_WINDOW 消息（窗口管理器激活窗口的标准路径）。
+// gamescope 丢弃内部焦点时，X 焦点可能仍在游戏窗口上，但 Wine 的内部
+// 活动状态已失同步，会把下一个合成点击当激活点击吞掉；重新走一遍激活
+// 流程能让 Wine 恢复活动状态。
+void LinuxWindowController::activate_window()
+{
+    if (m_display == nullptr || m_window == 0) {
+        return;
+    }
+    XEvent ev = {};
+    ev.xclient.type = ClientMessage;
+    ev.xclient.send_event = 1;
+    ev.xclient.display = m_display;
+    ev.xclient.window = m_window;
+    ev.xclient.message_type = XInternAtom(m_display, "_NET_ACTIVE_WINDOW", 0);
+    ev.xclient.format = 32;
+    ev.xclient.data.l[0] = 1; // source indication: application
+    ev.xclient.data.l[1] = 0; // timestamp
+    ev.xclient.data.l[2] = 0; // requestor's currently active window
+    XSendEvent(m_display, DefaultRootWindow(m_display), 0, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+    XFlush(m_display);
+}
+
 void LinuxWindowController::guard_input_focus(const std::function<void()>& action)
 {
+    // 隔离显示模式：先把焦点交给游戏窗口（Wine 视其为活动窗口，不再吞掉首个
+    // 合成点击），游戏自身的激活请求也只作用于隔离显示内部，无需归还焦点
+    if (m_isolated) {
+        activate_window();
+        if (!window_focused()) {
+            ensure_focus();
+        }
+        action();
+        return;
+    }
+
     // focus_for_keys 为 true 时用户明确希望游戏持有键盘焦点，不做任何干预
     if (m_focus_for_keys) {
         action();

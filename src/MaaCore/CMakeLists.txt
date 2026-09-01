@@ -58,6 +58,11 @@ if(LINUX)
     if(X11_FOUND)
         target_compile_definitions(MaaCore PRIVATE ASST_WITH_X11=1)
         target_link_libraries(MaaCore X11::X11)
+        # XTest：隔离显示模式（gamescope）下注入真实输入事件，绕过 Wine 吞点击
+        if(X11_Xtst_FOUND)
+            target_compile_definitions(MaaCore PRIVATE ASST_WITH_XTEST=1)
+            target_link_libraries(MaaCore X11::Xtst)
+        endif()
     endif()
 endif()
 
